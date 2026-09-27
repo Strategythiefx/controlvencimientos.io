@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1769aa">
+<link rel="manifest" href="manifest.json">
+<title>Control de vencimientos</title>
+<style>
+*{box-sizing:border-box}
+:root{
+  --bg:#e9eef5;--surface:#ffffff;--text:#080b12;--muted:#64748b;
+  --line:#dfe7f1;--primary:#080b12;--primary-soft:#edf7ff;
+  --danger:#b4235a;--danger-bg:#fff0f7;--warning:#1677c8;--warning-bg:#eaf7ff;
+  --success:#1677c8;--success-bg:#eaf7ff;
+}
+body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+button,input,select{font:inherit}
+button{border:0;cursor:pointer}
+header{background:rgba(255,255,255,.94);color:var(--text);padding:14px 18px;position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);backdrop-filter:blur(12px)}
+header h1{font-size:16px;font-weight:700;margin:0;letter-spacing:-.2px}
+.menu-container{position:relative}
+.menu-btn{background:transparent;color:var(--text);font-size:23px;cursor:pointer;padding:3px 8px;border-radius:8px;line-height:1}
+.menu-btn:hover{background:var(--primary-soft)}
+.dropdown-menu{position:absolute;right:0;top:40px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(15,23,42,.12);width:225px;display:none;flex-direction:column;z-index:20;overflow:hidden}
+.dropdown-menu.show{display:flex}
+.dropdown-item{padding:12px 15px;color:var(--text);text-decoration:none;font-size:13px;border:0;background:none;text-align:left;cursor:pointer;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--line)}
+.dropdown-item:last-child{border-bottom:none}
+.dropdown-item:hover{background:var(--primary-soft)}
+main{max-width:720px;margin:auto;padding:18px 14px 35px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 2px 10px rgba(15,23,42,.025)}
+h2{font-size:14px;margin:0 0 13px;color:var(--text);font-weight:700}
+label{display:block;font-size:12px;font-weight:600;margin:11px 0 5px;color:#475569}
+input,select{width:100%;padding:10px 11px;border:1px solid #d9dee7;border-radius:10px;background:#fff;color:var(--text);outline:none;transition:.15s}
+input:focus,select:focus{border-color:#9aa4b2;box-shadow:0 0 0 3px rgba(17,24,39,.05)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row-scan{display:flex;gap:7px;align-items:center}
+button{border-radius:10px;padding:10px 13px;font-weight:650;transition:.15s}
+button:active{transform:translateY(1px)}
+.primary{background:var(--primary);color:white;width:100%;margin-top:14px}
+.primary:hover{background:#252d3a}
+.secondary{background:var(--primary-soft);color:#172033}
+.secondary:hover{background:#e7eaee}
+.danger{background:var(--danger-bg);color:var(--danger)}
+.success{background:var(--success-bg);color:var(--success)}
+.btn-scan{background:var(--primary);color:white;white-space:nowrap}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{padding:12px 8px;border-radius:12px;background:#fafbfc;text-align:center;border:1px solid var(--line)}
+.stat b{display:block;font-size:20px;color:var(--text);line-height:1.1}
+.stat span{font-size:11px;color:var(--muted)}
+.item{border:1px solid var(--line);border-radius:12px;padding:13px;margin:8px 0;background:#fff}
+.item .top{display:flex;justify-content:space-between;gap:8px}.name{font-weight:700;font-size:14px}
+.badge{padding:4px 8px;border-radius:999px;font-size:10px;font-weight:700;white-space:nowrap}
+.ok{background:var(--success-bg);color:var(--success)}.soon{background:var(--warning-bg);color:var(--warning)}.expired{background:var(--danger-bg);color:var(--danger)}
+.meta{font-size:12px;color:#64748b;margin-top:7px;line-height:1.55}.actions{display:flex;gap:7px;margin-top:10px}
+.actions button{padding:7px 10px;font-size:11px}
+.empty{text-align:center;color:#94a3b8;padding:24px 5px}
+.note{font-size:12px;color:var(--muted);line-height:1.5}
+.hidden{display:none!important}
+.alert-banner{background:var(--warning-bg);color:var(--warning);border:1px solid #a9dcff;padding:11px 12px;border-radius:12px;margin-bottom:12px;font-size:12px}
+.alert-banner b{display:block;margin-bottom:4px;font-size:13px}
+
+/* Ventana emergente de vencimientos */
+.expiry-overlay{position:fixed;inset:0;background:rgba(4,8,18,.58);backdrop-filter:blur(3px);z-index:200;display:flex;align-items:center;justify-content:center;padding:18px}
+.expiry-modal{width:min(100%,390px);background:#fff;border:1px solid rgba(255,255,255,.8);border-radius:20px;padding:22px;box-shadow:0 24px 70px rgba(15,23,42,.25);animation:popupIn .18s ease-out}
+@keyframes popupIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+.expiry-icon{width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,#eaf7ff,#d9f1ff);display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:13px}
+.expiry-modal.expired-modal .expiry-icon{background:var(--danger-bg)}
+.expiry-kicker{font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.08em;color:var(--warning);margin-bottom:5px}
+.expired-modal .expiry-kicker{color:var(--danger)}
+.expiry-title{font-size:20px;line-height:1.2;margin:0 0 7px;letter-spacing:-.35px}
+.expiry-text{font-size:13px;color:#64748b;line-height:1.55;margin:0 0 16px}
+.expiry-data{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:17px}
+.expiry-data div{background:#f8fafc;border:1px solid var(--line);border-radius:11px;padding:10px}
+.expiry-data span{display:block;color:#94a3b8;font-size:10px;margin-bottom:3px}
+.expiry-data strong{font-size:13px}
+.expiry-actions{display:flex;gap:8px}
+.expiry-actions button{flex:1}
+.expiry-counter{text-align:center;color:#94a3b8;font-size:10px;margin-top:11px}
+
+/* Modales secundarios */
+.modal-bg{position:fixed;inset:0;background:rgba(4,8,18,.58);backdrop-filter:blur(3px);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal-content{background:white;border:1px solid var(--line);border-radius:17px;padding:19px;width:100%;max-width:430px;box-shadow:0 20px 50px rgba(15,23,42,.18)}
+#scannerModal{position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:101;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+#videoView{width:100%;max-width:400px;border-radius:14px;background:#000}
+
+body.dark{
+  --bg:#080b12;
+  --surface:#111722;
+  --text:#f4f8ff;
+  --muted:#9aa8ba;
+  --line:#273244;
+  --primary:#f4f8ff;
+  --primary-soft:#1a2433;
+  --danger:#ff7b9f;
+  --danger-bg:#351725;
+  --warning:#70c8ff;
+  --warning-bg:#102c42;
+  --success:#70c8ff;
+  --success-bg:#102c42;
+}
+body.dark header{background:rgba(8,11,18,.92);color:#f4f8ff;border-color:#273244}
+body.dark .dropdown-menu,
+body.dark .card,
+body.dark .item,
+body.dark .modal-content,
+body.dark .expiry-modal{background:#111722;color:#f4f8ff;border-color:#273244}
+body.dark .dropdown-item{color:#f4f8ff;border-color:#273244}
+body.dark .dropdown-item:hover,
+body.dark .menu-btn:hover{background:#1a2433}
+body.dark input,body.dark select{background:#0c111a;color:#f4f8ff;border-color:#334155}
+body.dark input::placeholder{color:#708096}
+body.dark .stat,
+body.dark .expiry-data div{background:#0c111a;border-color:#273244}
+body.dark .secondary{background:#1a2433;color:#dcecff}
+body.dark .primary{background:#eaf7ff;color:#07111d}
+body.dark .primary:hover{background:#ccecff}
+body.dark .empty{color:#708096}
+body.dark .meta{color:#9aa8ba}
+body.dark .expiry-text{color:#9aa8ba}
+body.dark .expiry-counter{color:#708096}
+body.dark .alert-banner{background:#102c42;color:#70c8ff;border-color:#245b82}
+body.dark .expiry-icon{background:linear-gradient(135deg,#102c42,#173b57)}
+body.dark code{color:#bfe5ff}
+.theme-toggle{
+  width:100%;display:flex;align-items:center;justify-content:space-between;
+  gap:10px;padding:11px 15px;border:0;border-bottom:1px solid var(--line);
+  background:transparent;color:var(--text);font-size:13px;font-weight:650;cursor:pointer;text-align:left
+}
+.theme-toggle:hover{background:var(--primary-soft)}
+.theme-state{
+  width:34px;height:20px;border-radius:999px;background:#cbd5e1;padding:2px;
+  display:flex;align-items:center;transition:.2s
+}
+.theme-state::after{content:"";width:16px;height:16px;border-radius:50%;background:white;display:block;transition:.2s;box-shadow:0 1px 3px #0003}
+body.dark .theme-state{background:#49b9ff;justify-content:flex-end}
+
+@media(max-width:560px){main{padding:12px 10px 25px}.card{padding:14px}.row{grid-template-columns:1fr}.expiry-modal{padding:19px}.expiry-title{font-size:18px}}
+#printSheet{display:none}@media print{html,body{margin:0!important;padding:0!important;background:#fff!important}body>*{display:none!important}#printSheet{display:block!important}}.print-page{width:190mm;height:277mm;margin:0 auto;box-sizing:border-box;padding:6mm 5mm 4mm;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif}.p-head{
+height:10.8mm;display:grid;grid-template-columns:27mm 1fr 58mm;
+border-bottom:1px solid #111;box-sizing:border-box}
+.p-logo{font-weight:900;font-size:7.5px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:1.2mm}
+.p-title{border-left:1px solid #111;border-right:1px solid #111;display:flex;align-items:center;justify-content:center;text-align:center;font-size:7.2px;font-weight:700;line-height:1.02;padding:0 2mm}
+.p-info{font-size:5.7px;font-weight:700;display:grid;grid-template-rows:3.1mm 3.2mm 4.5mm}
+.p-info-top{height:auto;display:flex;align-items:center;justify-content:center;border-bottom:1px solid #111}
+.p-info-top div{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+.p-info-top div+div{display:none}
+.p-info-bottom{height:auto;display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #111}
+.p-info-bottom div{display:flex;align-items:center;justify-content:center}
+.p-info-bottom div+div{border-left:1px solid #111}
+.p-info-page{display:flex;align-items:center;justify-content:center}
+.p-month{height:4.8mm;border:1px solid #111;border-bottom:0;display:grid;grid-template-columns:38mm 1fr;font-size:6.2px;font-weight:700}.p-month div{display:flex;align-items:center;padding-left:2.5mm}.p-month div+div{border-left:1px solid #111}.p-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:7.3px}.p-table th,.p-table td{border:1px solid #111;padding:0 1.2mm;text-align:center;box-sizing:border-box}.p-table th{font-weight:700;height:6mm;line-height:1.0}.p-table thead tr:nth-child(2) th{height:4.5mm}.p-table tbody td{height:8.8mm}.p-table td.prod{text-align:left;overflow:hidden;white-space:nowrap}.p-table col.c-day{width:7%}.p-table col.c-ean{width:13%}.p-table col.c-prod{width:17%}.p-table col.c-qty{width:8%}.p-table col.c-vd,.p-table col.c-vm,.p-table col.c-rd,.p-table col.c-rm{width:5.5%}.p-table col.c-plan{width:18%}.p-table col.c-resp{width:15%}.p-bottom{border:1px solid #111;border-top:0;font-size:7px;font-weight:700}.p-bottom-row{height:6.3mm;border-top:1px solid #111;display:flex;align-items:center;padding:0 2mm}.p-bottom-row:first-child{border-top:0}.p-bottom-row.obs{height:13mm;align-items:flex-start;padding-top:1.5mm}@page{size:A4 portrait;margin:0}</style>
+</head>
+<body>
+<header>
+  <h1>📦 Vencimientos</h1>
+  <div class="menu-container">
+    <button class="menu-btn" id="menuToggle" aria-label="Menú de opciones">⋮</button>
+    <div class="dropdown-menu" id="dropdownMenu">
+      <button class="theme-toggle" id="themeToggle"><span>🌙 Modo oscuro</span><span class="theme-state" id="themeState"></span></button>
+      <button class="dropdown-item" id="menuScanMode">⚙️ Modo de Escáner</button>
+      <button class="dropdown-item" id="menuNotify">🔔 Probar alerta</button>
+      <button class="dropdown-item" id="menuBackup">☁️ Copia de Seguridad</button>
+    </div>
+  </div>
+</header>
+
+<main>
+<div id="bannerContainer"></div>
+
+<section class="card">
+<div class="stats">
+  <div class="stat"><b id="total">0</b><span>Total</span></div>
+  <div class="stat"><b id="soon">0</b><span>Próximos</span></div>
+  <div class="stat"><b id="expired">0</b><span>Vencidos</span></div>
+</div>
+</section>
+
+<section class="card">
+<h2 id="formTitle">➕ Agregar producto</h2>
+
+<div class="row">
+  <div>
+    <label>Código / ID (Opcional)</label>
+    <div class="row-scan">
+      <input id="barcode" placeholder="Código EAN/UPC...">
+      <button type="button" class="btn-scan hidden" id="startScan">📷</button>
+    </div>
+  </div>
+  <div>
+    <label>Código PLU (Opcional)</label>
+    <input id="plu" placeholder="Ej. 4011">
+  </div>
+</div>
+
+<label>Producto</label>
+<input id="name" placeholder="Ej. Yogur Alpina 250g">
+
+<div class="row">
+  <div><label>Cantidad</label><input id="qty" type="number" min="0" step="1" placeholder="Ej. 12"></div>
+  <div><label>Vencimiento</label><input id="date" type="date"></div>
+</div>
+
+<button class="primary" id="save">Guardar producto</button>
+<button class="secondary hidden" id="cancel" style="width:100%;margin-top:8px">Cancelar edición</button>
+</section>
+
+<section class="card">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><h2 style="margin:0">📋 Inventario</h2><button class="secondary" id="printInventory" style="margin:0">🖨️ Imprimir inventario</button></div>
+<input id="search" placeholder="🔎 Buscar por nombre, código o PLU..." style="margin-bottom:8px">
+<div id="list"></div>
+</section>
+</main>
+
+
+<!-- Ventana emergente de vencimientos -->
+<div id="expiryOverlay" class="expiry-overlay hidden" aria-hidden="true">
+  <div id="expiryModal" class="expiry-modal" role="dialog" aria-modal="true" aria-labelledby="expiryTitle">
+    <div id="expiryIcon" class="expiry-icon">⚠️</div>
+    <div id="expiryKicker" class="expiry-kicker">Próximo a vencer</div>
+    <h3 id="expiryTitle" class="expiry-title"></h3>
+    <p id="expiryText" class="expiry-text"></p>
+    <div class="expiry-data">
+      <div><span>CANTIDAD</span><strong id="expiryQty"></strong></div>
+      <div><span>VENCIMIENTO</span><strong id="expiryDate"></strong></div>
+    </div>
+    <div class="expiry-actions">
+      <button class="secondary" id="expiryNever" style="flex:1">No volver a mostrar</button>
+      <button class="primary" id="expiryOk" style="margin-top:0;flex:1">Entendido</button>
+    </div>
+    <div id="expiryCounter" class="expiry-counter"></div>
+  </div>
+</div>
+
+<!-- Modal Configuración de Escáner -->
+<div id="scanModeModal" class="modal-bg hidden">
+  <div class="modal-content">
+    <h2>⚙️ Configuración del Escáner</h2>
+    <label>Selecciona el modo de lectura:</label>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+      <button type="button" class="secondary" id="modeGunBtn" style="text-align:left;padding:14px">🔫 <b>Pistola USB / Bluetooth</b><br><small>Lector físico que escribe directo en pantalla</small></button>
+      <button type="button" class="secondary" id="modeCamBtn" style="text-align:left;padding:14px">📷 <b>Cámara del dispositivo</b><br><small>Muestra el botón de cámara junto al código de barras</small></button>
+    </div>
+    <button class="secondary" id="closeScanModeModal" style="width:100%;margin-top:15px">Cerrar</button>
+  </div>
+</div>
+
+<!-- Modal Copia de Seguridad -->
+<div id="printSheet"><div class="print-page"><div class="p-head">
+<div class="p-logo">éxito</div>
+<div class="p-title">RELACIÓN DE PRODUCTOS PRÓXIMOS A RETIRAR POR<br>FECHA DE VENCIMIENTO</div>
+<div class="p-info">
+<div class="p-info-top"><div>Código: F-0646</div></div>
+<div class="p-info-bottom"><div>Versión: 1</div><div>Año: <span id="printYear"></span></div></div>
+<div class="p-info-page">Página 1 de 1</div>
+</div>
+</div><div class="p-month"><div>MES: <span id="printMonth"></span></div><div>ALMACÉN: CARULLA EXPRESS CALLE ROMAN</div></div><table class="p-table"><colgroup><col class="c-day"><col class="c-ean"><col class="c-prod"><col class="c-qty"><col class="c-vd"><col class="c-vm"><col class="c-rd"><col class="c-rm"><col class="c-plan"><col class="c-resp"></colgroup><thead><tr><th rowspan="2">DÍA</th><th rowspan="2">EAN/PLU</th><th rowspan="2">Producto</th><th rowspan="2">Cantidad</th><th colspan="2">Vencimiento</th><th colspan="2">Retiro</th><th rowspan="2">Plan de acción</th><th rowspan="2">Responsable del plan<br>de acción</th></tr><tr><th>Día</th><th>Mes</th><th>Día</th><th>Mes</th></tr></thead><tbody id="printRows"></tbody></table><div class="p-bottom"><div class="p-bottom-row">SUBLINEAS A VERIFICAR EN EL MES:</div><div class="p-bottom-row">NOMBRE CLARO DEL LÍDER Y FECHA DE LA VERIFICACIÓN:</div><div class="p-bottom-row obs">OBSERVACIONES / CORRECCIONES:</div></div></div></div>
+<div id="backupModal" class="modal-bg hidden">
+  <div class="modal-content">
+    <h2>☁️ Copia de Seguridad</h2>
+    <p class="note" style="margin-bottom:15px">Guarda un archivo de respaldo en tu equipo o Google Drive para restaurarlo en caso de daño o cambio de dispositivo.</p>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="success" id="btnExport">📥 Descargar Respaldo (JSON)</button>
+      <button class="secondary" id="btnImportTrigger">📤 Restaurar desde Respaldo</button>
+      <input type="file" id="importFile" accept=".json" class="hidden">
+    </div>
+    <button class="secondary" id="closeBackupModal" style="width:100%;margin-top:15px">Cerrar</button>
+  </div>
+</div>
+
+<!-- Modal Escáner de Cámara -->
+<div id="scannerModal" class="hidden">
+  <video id="videoView" playsinline muted></video>
+  <button type="button" class="danger" id="closeScan" style="margin-top:15px; width:200px">❌ Cerrar cámara</button>
+</div>
+
+<script>
+const KEY='control_vencimientos_v1';
+let products=JSON.parse(localStorage.getItem(KEY)||'[]');
+let editing=null;
+let videoStream=null;
+let isScanning=false;
+let scanMode='gun';
+
+const $=id=>document.getElementById(id);
+const THEME_KEY='vencimientos_tema';
+function applyTheme(){
+  const dark=localStorage.getItem(THEME_KEY)==='dark';
+  document.body.classList.toggle('dark',dark);
+  const label=$('themeToggle')?.querySelector('span');
+  if(label) label.textContent=dark?'☀️ Modo claro':'🌙 Modo oscuro';
+  const state=$('themeState');
+  if(state) state.setAttribute('aria-label',dark?'Cambiar a modo claro':'Cambiar a modo oscuro');
+}
+
+
+// Menú desplegable
+$('menuToggle').onclick=(e)=>{ e.stopPropagation(); $('dropdownMenu').classList.toggle('show'); };
+document.onclick=()=>$('dropdownMenu').classList.remove('show');
+function escapePrint(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function printInventory(){if(!products.length){alert('No hay productos en el inventario para imprimir.');return;}const now=new Date(),months=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];$('printYear').textContent=now.getFullYear();$('printMonth').textContent=months[now.getMonth()];$('printRows').innerHTML=products.map(p=>{let day='',month='';if(p.date){const a=p.date.split('-');if(a.length===3){day=a[2];month=a[1];}}const id=[p.barcode,p.plu].filter(Boolean).join(' / ');return `<tr><td>${String(now.getDate()).padStart(2,'0')}</td><td>${escapePrint(id)}</td><td class="prod">${escapePrint(p.name)}</td><td>${escapePrint(p.qty)}</td><td>${day}</td><td>${month}</td><td></td><td></td><td></td><td></td></tr>`;}).join('');for(let i=products.length;i<18;i++)$('printRows').insertAdjacentHTML('beforeend','<tr><td></td><td></td><td class="prod"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>');window.print();}
+$('printInventory').onclick=printInventory;
+
+
+$('themeToggle').onclick=()=>{
+  const next=document.body.classList.contains('dark')?'light':'dark';
+  localStorage.setItem(THEME_KEY,next);
+  applyTheme();
+};
+applyTheme();
+
+
+$('menuScanMode').onclick=()=>{ $('dropdownMenu').classList.remove('show'); $('scanModeModal').classList.remove('hidden'); };
+$('closeScanModeModal').onclick=()=>$('scanModeModal').classList.add('hidden');
+
+$('menuBackup').onclick=()=>{ $('dropdownMenu').classList.remove('show'); $('backupModal').classList.remove('hidden'); };
+$('closeBackupModal').onclick=()=>$('backupModal').classList.add('hidden');
+
+$('menuNotify').onclick=()=>{ $('dropdownMenu').classList.remove('show'); requestAndNotify(); };
+
+function saveData(){localStorage.setItem(KEY,JSON.stringify(products));}
+
+function findDuplicateProduct({barcode,plu,ignoreId=null}){
+  const b=norm(barcode),p=norm(plu);
+  const inv=products.find(x=>{
+    if(x.id===ignoreId)return false;
+    return (b&&norm(x.barcode)===b)||(p&&norm(x.plu)===p);
+  });
+  if(inv)return {type:b&&norm(inv.barcode)===b?'code':'plu',product:inv};
+  const cat=catalog.find(x=>(b&&norm(x.barcode)===b)||(p&&norm(x.plu)===p));
+  return cat?{type:b&&norm(cat.barcode)===b?'code':'plu',product:cat}:null;
+}
+
+function daysLeft(dateStr){
+  const now=new Date(); now.setHours(0,0,0,0);
+  const d=new Date(dateStr+'T00:00:00'); d.setHours(0,0,0,0);
+  return Math.ceil((d-now)/86400000);
+}
+function status(days){
+  if(days<0) return ['VENCIDO','expired'];
+  if(days<=20) return [days===0?'VENCE HOY':`⚠️ ${days} d`,'soon'];
+  return ['OK','ok'];
+}
+function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
+
+function render(){
+  const q=$('search').value.toLowerCase().trim();
+  const filtered=products.filter(p=>
+    p.name.toLowerCase().includes(q) || 
+    (p.barcode && p.barcode.toLowerCase().includes(q)) ||
+    (p.plu && p.plu.toLowerCase().includes(q))
+  ).sort((a,b)=>a.date.localeCompare(b.date));
+
+  const soon=products.filter(p=>daysLeft(p.date)>=0&&daysLeft(p.date)<=20);
+  const expired=products.filter(p=>daysLeft(p.date)<0).length;
+  $('total').textContent=products.length;$('soon').textContent=soon.length;$('expired').textContent=expired;
+  
+  if(soon.length > 0){
+    const itemsText = soon.slice(0,2).map(p=>`• <b>${esc(p.name)}</b> (vence en ${daysLeft(p.date)} días)`).join('<br>');
+    $('bannerContainer').innerHTML = `<div class="alert-banner"><b>⚠️ Próximos a vencer:</b>${itemsText}</div>`;
+  } else {
+    $('bannerContainer').innerHTML = '';
+  }
+
+  $('list').innerHTML=filtered.length?filtered.map(p=>{
+    const d=daysLeft(p.date), st=status(d);
+    return `<div class="item">
+      <div class="top">
+        <span class="name">${esc(p.name)}</span>
+        <span class="badge ${st[1]}">${st[0]}</span>
+      </div>
+      <div class="meta">
+        ${p.barcode ? `Código: <code>${esc(p.barcode)}</code> ` : ''}
+        ${p.plu ? `| PLU: <code>${esc(p.plu)}</code>` : ''}<br>
+        Cantidad: <b>${p.qty}</b> | Vence: <b>${new Date(p.date+'T00:00:00').toLocaleDateString('es-CO')}</b><br>
+        <small>${d<0?`Venció hace ${Math.abs(d)} días`:d===0?'Vence hoy':`Faltan ${d} días`}</small>
+      </div>
+      <div class="actions">
+        <button class="secondary" onclick="edit('${p.id}')">✏️ Editar</button>
+        <button class="danger" onclick="removeProduct('${p.id}')">🗑️ Eliminar</button>
+      </div>
+    </div>`;
+  }).join(''):'<div class="empty">No hay productos registrados.</div>';
+}
+
+function resetForm(){
+  editing=null;$('formTitle').textContent='➕ Agregar producto';$('save').textContent='Guardar producto';
+  $('cancel').classList.add('hidden');$('name').value='';$('qty').value='';$('date').value='';$('barcode').value='';$('plu').value='';
+}
+
+$('save').onclick=()=>{
+  const name=$('name').value.trim(),qty=parseInt($('qty').value,10),date=$('date').value,barcode=$('barcode').value.trim(),plu=$('plu').value.trim();
+  if(!name||!Number.isFinite(qty)||qty<0||!date){alert('Completa producto, cantidad y fecha de vencimiento.');return;}
+  const d=findDuplicateProduct({barcode,plu,ignoreId:editing});
+  if(d&&d.product.name&&norm(d.product.name)!==norm(name)){
+    alert(`No se puede guardar: ese ${d.type==='code'?'código de barras / ID':'PLU'} ya pertenece a "${d.product.name}".`);
+    return;
+  }
+  const master=upsertCatalog(name,barcode,plu);
+  if(editing){
+    const p=products.find(x=>x.id===editing);
+    Object.assign(p,{name:master.name||name,qty,date,barcode:master.barcode||barcode,plu:master.plu||plu});
+  }else{
+    products.push({id:crypto.randomUUID(),name:master.name||name,qty,date,barcode:master.barcode||barcode,plu:master.plu||plu});
+  }
+  saveData();resetForm();render();checkAlerts();
+};
+
+$('cancel').onclick=resetForm;
+$('search').oninput=render;
+
+// Catálogo maestro: nombre, código de barras/ID y PLU.
+const CATALOG_KEY='catalogo_productos_v1';
+let catalog=JSON.parse(localStorage.getItem(CATALOG_KEY)||'[]');
+function saveCatalog(){localStorage.setItem(CATALOG_KEY,JSON.stringify(catalog));}
+function norm(v){return String(v||'').trim().toLowerCase();}
+function findCatalog(name='',barcode='',plu=''){
+  const n=norm(name),b=norm(barcode),p=norm(plu);
+  return catalog.find(c=>(n&&norm(c.name)===n)||(b&&norm(c.barcode)===b)||(p&&norm(c.plu)===p))||null;
+}
+function upsertCatalog(name='',barcode='',plu=''){
+  let c=findCatalog(name,barcode,plu);
+  if(!c){c={id:crypto.randomUUID(),name:name.trim(),barcode:barcode.trim(),plu:plu.trim()};catalog.push(c);}
+  else{
+    if(name.trim()&&!c.name)c.name=name.trim();
+    if(barcode.trim()&&!c.barcode)c.barcode=barcode.trim();
+    if(plu.trim()&&!c.plu)c.plu=plu.trim();
+  }
+  saveCatalog();return c;
+}
+function autoFill(){
+  const c=findCatalog($('name').value,$('barcode').value,$('plu').value);
+  if(!c)return;
+  if(!$('name').value&&c.name)$('name').value=c.name;
+  if(!$('barcode').value&&c.barcode)$('barcode').value=c.barcode;
+  if(!$('plu').value&&c.plu)$('plu').value=c.plu;
+}
+$('name').oninput=autoFill;
+$('barcode').oninput=autoFill;
+$('plu').oninput=autoFill;
+
+window.edit=id=>{
+  const p=products.find(x=>x.id===id);if(!p)return;
+  editing=id;$('formTitle').textContent='✏️ Editar producto';$('save').textContent='Guardar cambios';
+  $('cancel').classList.remove('hidden');
+  $('name').value=p.name;$('qty').value=p.qty;$('date').value=p.date;$('barcode').value=p.barcode||'';$('plu').value=p.plu||'';
+  window.scrollTo({top:0,behavior:'smooth'});
+};
+
+window.removeProduct=id=>{
+  if(confirm('¿Eliminar este producto?')){
+    products=products.filter(p=>p.id!==id);
+    mutedAlerts=mutedAlerts.filter(x=>x!==id);
+    localStorage.setItem('vencimientos_no_mostrar',JSON.stringify(mutedAlerts));
+    saveData();render();
+  }
+};
+
+// Respaldo
+$('btnExport').onclick = () => {
+  if (products.length === 0) { alert('No hay productos para respaldar.'); return; }
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(products, null, 2));
+  const downloadAnchor = document.createElement('a');
+  downloadAnchor.setAttribute("href", dataStr);
+  downloadAnchor.setAttribute("download", `respaldo_vencimientos_${new Date().toISOString().slice(0,10)}.json`);
+  document.body.appendChild(downloadAnchor); downloadAnchor.click(); downloadAnchor.remove();
+};
+
+$('btnImportTrigger').onclick = () => $('importFile').click();
+$('importFile').onchange = (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    try {
+      const importedData = JSON.parse(event.target.result);
+      if (Array.isArray(importedData)) {
+        if (confirm(`¿Reemplazar tu lista por esta copia de ${importedData.length} productos?`)) {
+          products = importedData; saveData(); render(); $('backupModal').classList.add('hidden'); alert('✅ Copia restaurada.');
+        }
+      }
+    } catch (err) { alert('Archivo no válido.'); }
+  };
+  reader.readAsText(file);
+};
+
+// Modos Escáner
+$('modeGunBtn').onclick=()=>{
+  scanMode='gun'; $('startScan').classList.add('hidden'); $('scanModeModal').classList.add('hidden');
+};
+$('modeCamBtn').onclick=()=>{
+  scanMode='cam'; $('startScan').classList.remove('hidden'); $('scanModeModal').classList.add('hidden');
+};
+
+let alertQueue=[];
+let alertOpen=false;
+let alertedToday=new Set();
+let mutedAlerts=JSON.parse(localStorage.getItem('vencimientos_no_mostrar')||'[]');
+let alertTimer=null;
+let currentAlertProduct=null;
+
+function dateKey(){
+  const d=new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function showExpiryPopup(product, queueIndex=0){
+  alertOpen=true;
+  currentAlertProduct=product;
+  const d=daysLeft(product.date);
+  const expired=d<0;
+  const overlay=$('expiryOverlay');
+  const modal=$('expiryModal');
+
+  modal.classList.toggle('expired-modal', expired);
+  $('expiryIcon').textContent=expired?'⛔':'⚠️';
+  $('expiryKicker').textContent=expired?'Producto vencido':'Próximo a vencer';
+  $('expiryTitle').textContent=product.name;
+  $('expiryText').textContent=expired
+    ? `Este producto venció hace ${Math.abs(d)} ${Math.abs(d)===1?'día':'días'}.`
+    : d===0 ? 'Este producto vence hoy.'
+    : `Este producto vence en ${d} ${d===1?'día':'días'}.`;
+  $('expiryQty').textContent=`${product.qty} ${product.qty===1?'unidad':'unidades'}`;
+  $('expiryDate').textContent=new Date(product.date+'T00:00:00').toLocaleDateString('es-CO');
+  $('expiryCounter').textContent=alertQueue.length>1 ? `${queueIndex+1} de ${queueIndex+1+alertQueue.length-1}` : '';
+
+  overlay.classList.remove('hidden');
+  overlay.setAttribute('aria-hidden','false');
+}
+
+function closeExpiryPopup(){
+  $('expiryOverlay').classList.add('hidden');
+  $('expiryOverlay').setAttribute('aria-hidden','true');
+  alertOpen=false;
+  showNextExpiryPopup();
+}
+
+function showNextExpiryPopup(){
+  if(alertOpen || !alertQueue.length) return;
+  const next=alertQueue.shift();
+  showExpiryPopup(next.product, next.index);
+}
+
+function queueExpiryAlerts(productsToAlert){
+  if(!productsToAlert.length) return;
+  const today=dateKey();
+  const unique=productsToAlert.filter(p=>{
+    if(mutedAlerts.includes(p.id)) return false;
+    const key=`${today}:${p.id}`;
+    if(alertedToday.has(key)) return false;
+    alertedToday.add(key);
+    return true;
+  });
+  if(!unique.length) return;
+
+  unique.forEach((p,i)=>alertQueue.push({product:p,index:i}));
+  showNextExpiryPopup();
+
+  clearTimeout(alertTimer);
+  alertTimer=setTimeout(()=>alertedToday.clear(),86400000);
+}
+
+$('expiryOk').onclick=closeExpiryPopup;
+$('expiryNever').onclick=()=>{
+  if(currentAlertProduct && currentAlertProduct.id!=='__test__'){
+    if(!mutedAlerts.includes(currentAlertProduct.id)) mutedAlerts.push(currentAlertProduct.id);
+    localStorage.setItem('vencimientos_no_mostrar',JSON.stringify(mutedAlerts));
+  }
+  closeExpiryPopup();
+};
+$('expiryOverlay').addEventListener('click',e=>{
+  if(e.target===$('expiryOverlay')) closeExpiryPopup();
+});
+
+async function requestAndNotify(){
+  // La alerta de prueba ahora usa la misma ventana emergente minimalista.
+  const test={
+    id:'__test__',
+    name:'Ejemplo de producto',
+    qty:3,
+    date:new Date().toISOString().slice(0,10)
+  };
+  alertQueue.push({product:test,index:0});
+  showNextExpiryPopup();
+}
+
+function checkAlerts(){
+  const soon=products
+    .filter(p=>daysLeft(p.date)>=0 && daysLeft(p.date)<=20)
+    .sort((a,b)=>a.date.localeCompare(b.date));
+
+  // Se muestran de forma secuencial, nunca varias ventanas al mismo tiempo.
+  queueExpiryAlerts(soon);
+}
+
+function stopScanner(){
+  isScanning = false;
+  if (videoStream) { videoStream.getTracks().forEach(track => track.stop()); videoStream = null; }
+  $('videoView').srcObject = null; $('scannerModal').classList.add('hidden');
+}
+
+$('startScan').onclick = async () => {
+  // La API de cámara requiere HTTPS (o localhost).
+  if (!window.isSecureContext) {
+    alert(
+      'La cámara no puede usarse desde esta dirección.\\n\\n' +
+      'Abre esta aplicación mediante HTTPS (por ejemplo, una página web segura) ' +
+      'y vuelve a intentarlo. Si abriste index.html directamente desde el teléfono, ' +
+      'esa es la causa.'
+    );
+    return;
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert(
+      'Este navegador no permite acceder a la cámara desde esta página.\\n\\n' +
+      'Prueba con Chrome o Safari actualizado y asegúrate de abrir la aplicación mediante HTTPS.'
+    );
+    return;
+  }
+
+  if (!('BarcodeDetector' in window)) {
+    alert(
+      'Tu navegador permite usar la cámara, pero no tiene disponible BarcodeDetector.\\n\\n' +
+      'Prueba con Chrome actualizado en Android o con otro navegador compatible.'
+    );
+    return;
+  }
+
+  try {
+    // Pedimos la cámara trasera, pero dejamos que el navegador elija si no puede fijarla.
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    });
+
+    videoStream = stream;
+    $('videoView').srcObject = stream;
+    $('scannerModal').classList.remove('hidden');
+    isScanning = true;
+    await $('videoView').play();
+
+    const detector = new BarcodeDetector({
+      formats: ['ean_13', 'ean_8', 'code_128', 'qr_code', 'upc_a', 'upc_e']
+    });
+
+    const scanLoop = async () => {
+      if (!isScanning || $('scannerModal').classList.contains('hidden')) return;
+
+      try {
+        const barcodes = await detector.detect($('videoView'));
+        if (barcodes.length > 0) {
+          $('barcode').value = barcodes[0].rawValue;
+          $('barcode').dispatchEvent(new Event('input'));
+          stopScanner();
+          return;
+        }
+      } catch (err) {
+        // El detector puede fallar durante un frame; continuamos escaneando.
+      }
+
+      requestAnimationFrame(scanLoop);
+    };
+
+    requestAnimationFrame(scanLoop);
+
+  } catch (err) {
+    // Liberar cualquier stream parcial.
+    if (videoStream) {
+      videoStream.getTracks().forEach(track => track.stop());
+      videoStream = null;
+    }
+
+    const name = err && err.name ? err.name : '';
+    let message;
+
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+      message =
+        'El navegador bloqueó el acceso a la cámara.\\n\\n' +
+        '1. Comprueba que esta página está abierta con HTTPS.\\n' +
+        '2. En los permisos del sitio, permite Cámara.\\n' +
+        '3. Si anteriormente pulsaste “Bloquear”, cambia ese permiso a “Permitir” y vuelve a cargar la página.';
+    } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+      message = 'No se encontró una cámara disponible en este dispositivo.';
+    } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+      message = 'La cámara está siendo utilizada por otra aplicación. Ciérrala e inténtalo de nuevo.';
+    } else if (name === 'SecurityError') {
+      message = 'El navegador bloqueó la cámara por motivos de seguridad. Abre la aplicación mediante HTTPS.';
+    } else {
+      message = 'No se pudo acceder a la cámara' + (err && err.message ? ': ' + err.message : '.');
+    }
+
+    alert(message);
+  }
+};
+
+$('closeScan').onclick = (e) => { e.preventDefault(); stopScanner(); };
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+if(!catalog.length&&products.length){
+  products.forEach(p=>upsertCatalog(p.name||'',p.barcode||'',p.plu||''));
+}
+render();
+setTimeout(checkAlerts, 350);
+</script>
+</body>
+</html>

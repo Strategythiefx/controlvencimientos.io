@@ -1,0 +1,10 @@
+{
+  "name": "Control de vencimientos",
+  "short_name": "Vencimientos",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f3f6f9",
+  "theme_color": "#1769aa",
+  "description": "Control local de productos próximos a vencer.",
+  "icons": []
+}
