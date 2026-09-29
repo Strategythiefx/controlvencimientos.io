@@ -162,6 +162,7 @@ border-bottom:1px solid #111;box-sizing:border-box}
       <button class="dropdown-item" id="menuNotify">🔔 Probar alerta</button>
       <button class="dropdown-item" id="menuBackup">☁️ Copia de Seguridad</button>
       <button class="dropdown-item" id="menuPrintInventory">🖨️ Imprimir inventario</button>
+      <button class="dropdown-item" id="menuEmailAlert">📧 Enviar alerta de vencimientos</button>
     </div>
   </div>
 </header>
@@ -321,6 +322,8 @@ $('closeBackupModal').onclick=()=>$('backupModal').classList.add('hidden');
 $('menuNotify').onclick=()=>{ $('dropdownMenu').classList.remove('show'); requestAndNotify(); };
 
 function saveData(){
+  syncInventoryWithEmailService();
+
   localStorage.setItem(KEY,JSON.stringify(products));
   syncInventoryToEmailService();
 }
@@ -753,6 +756,34 @@ saveCatalog();
 render();
 syncInventoryToEmailService();
 setTimeout(checkAlerts, 350);
+
+async function sendExpiryAlertNow(){
+  if(!EMAIL_ALERT_WEBHOOK){
+    alert('⚠️ El servicio de correo no está configurado.');
+    return;
+  }
+  try{
+    const r=await fetch(EMAIL_ALERT_WEBHOOK,{
+      method:'POST',
+      mode:'cors',
+      headers:{'Content-Type':'text/plain;charset=UTF-8'},
+      body:JSON.stringify({
+        action:'sendAlert',
+        token:'CARULLA_ALERTAS_V1',
+        inventory:products,
+        manual:true
+      })
+    });
+    let result=null;
+    try{ result=await r.json(); }catch(e){}
+    alert(result && result.message ? result.message : '✅ Solicitud enviada al sistema de alertas.');
+  }catch(e){
+    alert('⚠️ No se pudo conectar con el servicio de correo.');
+  }
+}
+
+
+$('menuEmailAlert').onclick=()=>{ $('dropdownMenu').classList.remove('show'); sendExpiryAlertNow(); };
 </script>
 </body>
 </html>
