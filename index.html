@@ -60,7 +60,7 @@ button:active{transform:translateY(1px)}
 .alert-banner{background:var(--warning-bg);color:var(--warning);border:1px solid #a9dcff;padding:11px 12px;border-radius:12px;margin-bottom:12px;font-size:12px}
 .alert-banner b{display:block;margin-bottom:4px;font-size:13px}
 
-
+/* Ventana emergente de vencimientos */
 .expiry-overlay{position:fixed;inset:0;background:rgba(4,8,18,.58);backdrop-filter:blur(3px);z-index:200;display:flex;align-items:center;justify-content:center;padding:18px}
 .expiry-modal{width:min(100%,390px);background:#fff;border:1px solid rgba(255,255,255,.8);border-radius:20px;padding:22px;box-shadow:0 24px 70px rgba(15,23,42,.25);animation:popupIn .18s ease-out}
 @keyframes popupIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
@@ -160,9 +160,9 @@ border-bottom:1px solid #111;box-sizing:border-box}
       <button class="theme-toggle" id="themeToggle"><span>🌙 Modo oscuro</span><span class="theme-state" id="themeState"></span></button>
       <button class="dropdown-item" id="menuScanMode">⚙️ Modo de Escáner</button>
       <button class="dropdown-item" id="menuNotify">🔔 Probar alerta</button>
+      <button class="dropdown-item" id="menuEmailAlert">📧 Enviar alerta por correo ahora</button>
       <button class="dropdown-item" id="menuBackup">☁️ Copia de Seguridad</button>
       <button class="dropdown-item" id="menuPrintInventory">🖨️ Imprimir inventario</button>
-      <button class="dropdown-item" id="menuEmailAlert">📧 Enviar alerta de vencimientos</button>
     </div>
   </div>
 </header>
@@ -277,47 +277,24 @@ border-bottom:1px solid #111;box-sizing:border-box}
 </div>
 
 <script>
-(function preserveAndMigrateExistingInventory(){
-  try {
-    const legacyKey = 'control_vencimientos_v1';
-    const stableKey = KEY;
-
-    if (!localStorage.getItem(stableKey)) {
-      const legacy = localStorage.getItem(legacyKey);
-      if (legacy) localStorage.setItem(stableKey, legacy);
-    }
-    // Deliberately do NOT remove legacyKey.
-  } catch(e) {}
+const LEGACY_KEY='control_vencimientos_v1';
+const SITE_ID=(()=>{
+  const path=(location.pathname||'/').toLowerCase();
+  if(location.hostname.toLowerCase()==='strategythiefx.github.io' && path.startsWith('/controlvencimientos.io/')) return 'strategythiefx_controlvencimientos_io';
+  if(location.hostname.toLowerCase()==='strategythiefx.github.io' && path.startsWith('/vencimiento.io/')) return 'strategythiefx_vencimiento_io';
+  return (location.hostname+'_'+path).replace(/[^a-z0-9_-]/gi,'_').replace(/_+/g,'_');
 })();
+const KEY='control_vencimientos_v1_'+SITE_ID;
+const CATALOG_KEY='catalogo_productos_v1_'+SITE_ID;
+const MUTED_KEY='vencimientos_no_mostrar_'+SITE_ID;
+const EMAIL_SYNC_KEY='ultima_sincronizacion_correo_v1_'+SITE_ID;
 
-(function isolateLegacyStorage(){
-  try{ localStorage.removeItem('control_vencimientos_v1'); }catch(e){}
-})();
-
-const STORAGE_SITE_ID = (() => {
-  const host = location.hostname.toLowerCase();
-  const path = (location.pathname || '/').toLowerCase();
-
-  if (host === 'strategythiefx.github.io' && path.startsWith('/controlvencimientos.io/')) {
-    return 'strategythiefx_controlvencimientos_io';
-  }
-
-  if (host === 'strategythiefx.github.io' && path.startsWith('/vencimiento.io/')) {
-    return 'strategythiefx_vencimiento_io';
-  }
-
-  // Para copias/otros hosts, conserva aislamiento sin tocar las dos instalaciones oficiales.
-  return (host + '|' + path)
-    .replace(/\/+$/, '')
-    .replace(/[^a-zA-Z0-9_-]/g, '_');
-})();
-
-const KEY = 'control_vencimientos_v1_' +
-  STORAGE_SITE_ID.replace(/[^a-zA-Z0-9_-]/g, '_');
-
-const EMAIL_ALERT_WEBHOOK='https://script.google.com/macros/s/AKfycbzIcUoVT0SnCmR3K52odcxzkr_N4D_De7oXM1RA21d6vrWk1C0igTJdlYMtze95fXG9/exec';
-const EMAIL_ALERT_TOKEN='CARULLA_ALERTAS_V1';
-
+// La página antigua adopta el inventario histórico compartido una sola vez.
+// La página nueva empieza con almacenamiento independiente. La clave antigua no se borra.
+if(!localStorage.getItem(KEY) && SITE_ID==='strategythiefx_vencimiento_io'){
+  const legacy=localStorage.getItem(LEGACY_KEY);
+  if(legacy) localStorage.setItem(KEY,legacy);
+}
 let products=JSON.parse(localStorage.getItem(KEY)||'[]');
 let editing=null;
 let videoStream=null;
@@ -360,23 +337,33 @@ $('menuBackup').onclick=()=>{ $('dropdownMenu').classList.remove('show'); $('bac
 $('closeBackupModal').onclick=()=>$('backupModal').classList.add('hidden');
 
 $('menuNotify').onclick=()=>{ $('dropdownMenu').classList.remove('show'); requestAndNotify(); };
+$('menuEmailAlert').onclick=()=>{ $('dropdownMenu').classList.remove('show'); sendEmailAlertNow(); };
 
 function saveData(){
-  syncInventoryWithEmailService();
-
   localStorage.setItem(KEY,JSON.stringify(products));
   syncInventoryToEmailService();
 }
 
 const EMAIL_ALERT_WEBHOOK='https://script.google.com/macros/s/AKfycbzIcUoVT0SnCmR3K52odcxzkr_N4D_De7oXM1RA21d6vrWk1C0igTJdlYMtze95fXG9/exec';
-const EMAIL_SYNC_KEY='ultima_sincronizacion_correo_v1';
 function syncInventoryToEmailService(){
   if(!EMAIL_ALERT_WEBHOOK || EMAIL_ALERT_WEBHOOK.includes('PEGAR_AQUI')) return;
   try{
-    const payload={token:'CARULLA_ALERTAS_V1',inventory:products.map(p=>({id:p.id,name:p.name||'',barcode:p.barcode||'',plu:p.plu||'',qty:p.qty,date:p.date||''}))};
+    const payload={token:'CARULLA_ALERTAS_V1',siteId:SITE_ID,inventory:products.map(p=>({id:p.id,name:p.name||'',barcode:p.barcode||'',plu:p.plu||'',qty:p.qty,date:p.date||''}))};
     fetch(EMAIL_ALERT_WEBHOOK,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),keepalive:true})
       .then(()=>localStorage.setItem(EMAIL_SYNC_KEY,new Date().toISOString())).catch(()=>{});
   }catch(e){}
+}
+
+async function sendEmailAlertNow(){
+  if(!EMAIL_ALERT_WEBHOOK || EMAIL_ALERT_WEBHOOK.includes('PEGAR_AQUI')){
+    alert('El servicio de correo no está configurado.'); return;
+  }
+  if(!products.length){ alert('No hay productos en el inventario.'); return; }
+  try{
+    const payload={token:'CARULLA_ALERTAS_V1',siteId:SITE_ID,manual:true,action:'sendAlert',inventory:products.map(p=>({id:p.id,name:p.name||'',barcode:p.barcode||'',plu:p.plu||'',qty:p.qty,date:p.date||''}))};
+    await fetch(EMAIL_ALERT_WEBHOOK,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),keepalive:true});
+    alert('Solicitud enviada. El servidor comprobará los productos nuevos dentro de los próximos 30 días.');
+  }catch(e){ alert('No se pudo enviar la solicitud de alerta por correo.'); }
 }
 
 function findDuplicateProduct({barcode,plu,ignoreId=null}){
@@ -468,7 +455,6 @@ $('cancel').onclick=resetForm;
 $('search').oninput=render;
 
 // Catálogo maestro: nombre, código de barras/ID y PLU.
-const CATALOG_KEY='catalogo_productos_v1';
 let catalog=JSON.parse(localStorage.getItem(CATALOG_KEY)||'[]');
 function saveCatalog(){localStorage.setItem(CATALOG_KEY,JSON.stringify(catalog));}
 function norm(v){return String(v||'').trim().toLowerCase();}
@@ -525,7 +511,7 @@ window.removeProduct=id=>{
     const removed=products.find(p=>p.id===id);
     products=products.filter(p=>p.id!==id);
     mutedAlerts=mutedAlerts.filter(x=>x!==id);
-    localStorage.setItem('vencimientos_no_mostrar',JSON.stringify(mutedAlerts));
+    localStorage.setItem(MUTED_KEY,JSON.stringify(mutedAlerts));
     if(removed){
       catalog=catalog.filter(c=>{
         const sameName=norm(c.name)===norm(removed.name);
@@ -582,7 +568,7 @@ $('modeCamBtn').onclick=()=>{
 let alertQueue=[];
 let alertOpen=false;
 let alertedToday=new Set();
-let mutedAlerts=JSON.parse(localStorage.getItem('vencimientos_no_mostrar')||'[]');
+let mutedAlerts=JSON.parse(localStorage.getItem(MUTED_KEY)||'[]');
 let alertTimer=null;
 let currentAlertProduct=null;
 
@@ -651,7 +637,7 @@ $('expiryOk').onclick=closeExpiryPopup;
 $('expiryNever').onclick=()=>{
   if(currentAlertProduct && currentAlertProduct.id!=='__test__'){
     if(!mutedAlerts.includes(currentAlertProduct.id)) mutedAlerts.push(currentAlertProduct.id);
-    localStorage.setItem('vencimientos_no_mostrar',JSON.stringify(mutedAlerts));
+    localStorage.setItem(MUTED_KEY,JSON.stringify(mutedAlerts));
   }
   closeExpiryPopup();
 };
@@ -796,35 +782,6 @@ saveCatalog();
 render();
 syncInventoryToEmailService();
 setTimeout(checkAlerts, 350);
-
-async function sendExpiryAlertNow(){
-  if(!EMAIL_ALERT_WEBHOOK){
-    alert('⚠️ El servicio de correo no está configurado.');
-    return;
-  }
-  try{
-    const r=await fetch(EMAIL_ALERT_WEBHOOK,{
-      method:'POST',
-      mode:'cors',
-      headers:{'Content-Type':'text/plain;charset=UTF-8'},
-      body:JSON.stringify({
-        action:'sendAlert',
-        token:'CARULLA_ALERTAS_V1',
-        siteId:STORAGE_SITE_ID,
-        inventory:products,
-        manual:true
-      })
-    });
-    let result=null;
-    try{ result=await r.json(); }catch(e){}
-    alert(result && result.message ? result.message : '✅ Solicitud enviada al sistema de alertas.');
-  }catch(e){
-    alert('⚠️ No se pudo conectar con el servicio de correo.');
-  }
-}
-
-
-$('menuEmailAlert').onclick=()=>{ $('dropdownMenu').classList.remove('show'); sendExpiryAlertNow(); };
 </script>
 </body>
 </html>
