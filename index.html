@@ -60,7 +60,7 @@ button:active{transform:translateY(1px)}
 .alert-banner{background:var(--warning-bg);color:var(--warning);border:1px solid #a9dcff;padding:11px 12px;border-radius:12px;margin-bottom:12px;font-size:12px}
 .alert-banner b{display:block;margin-bottom:4px;font-size:13px}
 
-/* Ventana emergente de vencimientos */
+
 .expiry-overlay{position:fixed;inset:0;background:rgba(4,8,18,.58);backdrop-filter:blur(3px);z-index:200;display:flex;align-items:center;justify-content:center;padding:18px}
 .expiry-modal{width:min(100%,390px);background:#fff;border:1px solid rgba(255,255,255,.8);border-radius:20px;padding:22px;box-shadow:0 24px 70px rgba(15,23,42,.25);animation:popupIn .18s ease-out}
 @keyframes popupIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
@@ -277,7 +277,47 @@ border-bottom:1px solid #111;box-sizing:border-box}
 </div>
 
 <script>
-const KEY='control_vencimientos_v1';
+(function preserveAndMigrateExistingInventory(){
+  try {
+    const legacyKey = 'control_vencimientos_v1';
+    const stableKey = KEY;
+
+    if (!localStorage.getItem(stableKey)) {
+      const legacy = localStorage.getItem(legacyKey);
+      if (legacy) localStorage.setItem(stableKey, legacy);
+    }
+    // Deliberately do NOT remove legacyKey.
+  } catch(e) {}
+})();
+
+(function isolateLegacyStorage(){
+  try{ localStorage.removeItem('control_vencimientos_v1'); }catch(e){}
+})();
+
+const STORAGE_SITE_ID = (() => {
+  const host = location.hostname.toLowerCase();
+  const path = (location.pathname || '/').toLowerCase();
+
+  if (host === 'strategythiefx.github.io' && path.startsWith('/controlvencimientos.io/')) {
+    return 'strategythiefx_controlvencimientos_io';
+  }
+
+  if (host === 'strategythiefx.github.io' && path.startsWith('/vencimiento.io/')) {
+    return 'strategythiefx_vencimiento_io';
+  }
+
+  // Para copias/otros hosts, conserva aislamiento sin tocar las dos instalaciones oficiales.
+  return (host + '|' + path)
+    .replace(/\/+$/, '')
+    .replace(/[^a-zA-Z0-9_-]/g, '_');
+})();
+
+const KEY = 'control_vencimientos_v1_' +
+  STORAGE_SITE_ID.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+const EMAIL_ALERT_WEBHOOK='https://script.google.com/macros/s/AKfycbzIcUoVT0SnCmR3K52odcxzkr_N4D_De7oXM1RA21d6vrWk1C0igTJdlYMtze95fXG9/exec';
+const EMAIL_ALERT_TOKEN='CARULLA_ALERTAS_V1';
+
 let products=JSON.parse(localStorage.getItem(KEY)||'[]');
 let editing=null;
 let videoStream=null;
@@ -770,6 +810,7 @@ async function sendExpiryAlertNow(){
       body:JSON.stringify({
         action:'sendAlert',
         token:'CARULLA_ALERTAS_V1',
+        siteId:STORAGE_SITE_ID,
         inventory:products,
         manual:true
       })
