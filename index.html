@@ -161,6 +161,7 @@ border-bottom:1px solid #111;box-sizing:border-box}
       <button class="dropdown-item" id="menuScanMode">⚙️ Modo de Escáner</button>
       <button class="dropdown-item" id="menuNotify">🔔 Probar alerta</button>
       <button class="dropdown-item" id="menuBackup">☁️ Copia de Seguridad</button>
+      <button class="dropdown-item" id="menuPrintInventory">🖨️ Imprimir inventario</button>
     </div>
   </div>
 </header>
@@ -298,8 +299,9 @@ function applyTheme(){
 $('menuToggle').onclick=(e)=>{ e.stopPropagation(); $('dropdownMenu').classList.toggle('show'); };
 document.onclick=()=>$('dropdownMenu').classList.remove('show');
 function escapePrint(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-function printInventory(){if(!products.length){alert('No hay productos en el inventario para imprimir.');return;}const now=new Date(),months=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];$('printYear').textContent=now.getFullYear();$('printMonth').textContent=months[now.getMonth()];$('printRows').innerHTML=products.map(p=>{let day='',month='';if(p.date){const a=p.date.split('-');if(a.length===3){day=a[2];month=a[1];}}const id=[p.barcode,p.plu].filter(Boolean).join(' / ');return `<tr><td>${String(now.getDate()).padStart(2,'0')}</td><td>${escapePrint(id)}</td><td class="prod">${escapePrint(p.name)}</td><td>${escapePrint(p.qty)}</td><td>${day}</td><td>${month}</td><td></td><td></td><td></td><td></td></tr>`;}).join('');for(let i=products.length;i<18;i++)$('printRows').insertAdjacentHTML('beforeend','<tr><td></td><td></td><td class="prod"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>');window.print();}
+function printInventory(){if(!products.length){alert('No hay productos en el inventario para imprimir.');return;}const now=new Date(),months=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];$('printYear').textContent=now.getFullYear();$('printMonth').textContent=months[now.getMonth()];$('printRows').innerHTML=products.map(p=>{let day='',month='';if(p.date){const a=p.date.split('-');if(a.length===3){day=a[2];month=a[1];}}const id=p.plu?p.plu:(p.barcode||'');return `<tr><td>${String(now.getDate()).padStart(2,'0')}</td><td>${escapePrint(id)}</td><td class="prod">${escapePrint(p.name)}</td><td>${escapePrint(p.qty)}</td><td>${day}</td><td>${month}</td><td></td><td></td><td></td><td></td></tr>`;}).join('');for(let i=products.length;i<18;i++)$('printRows').insertAdjacentHTML('beforeend','<tr><td></td><td></td><td class="prod"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>');window.print();}
 $('printInventory').onclick=printInventory;
+$('menuPrintInventory').onclick=printInventory;
 
 
 $('themeToggle').onclick=()=>{
@@ -318,17 +320,30 @@ $('closeBackupModal').onclick=()=>$('backupModal').classList.add('hidden');
 
 $('menuNotify').onclick=()=>{ $('dropdownMenu').classList.remove('show'); requestAndNotify(); };
 
-function saveData(){localStorage.setItem(KEY,JSON.stringify(products));}
+function saveData(){
+  localStorage.setItem(KEY,JSON.stringify(products));
+  syncInventoryToEmailService();
+}
+
+const EMAIL_ALERT_WEBHOOK='https://script.google.com/macros/s/AKfycbzIcUoVT0SnCmR3K52odcxzkr_N4D_De7oXM1RA21d6vrWk1C0igTJdlYMtze95fXG9/exec';
+const EMAIL_SYNC_KEY='ultima_sincronizacion_correo_v1';
+function syncInventoryToEmailService(){
+  if(!EMAIL_ALERT_WEBHOOK || EMAIL_ALERT_WEBHOOK.includes('PEGAR_AQUI')) return;
+  try{
+    const payload={token:'CARULLA_ALERTAS_V1',inventory:products.map(p=>({id:p.id,name:p.name||'',barcode:p.barcode||'',plu:p.plu||'',qty:p.qty,date:p.date||''}))};
+    fetch(EMAIL_ALERT_WEBHOOK,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),keepalive:true})
+      .then(()=>localStorage.setItem(EMAIL_SYNC_KEY,new Date().toISOString())).catch(()=>{});
+  }catch(e){}
+}
 
 function findDuplicateProduct({barcode,plu,ignoreId=null}){
   const b=norm(barcode),p=norm(plu);
+  // Los duplicados se comprueban solo contra el inventario actual.
   const inv=products.find(x=>{
     if(x.id===ignoreId)return false;
     return (b&&norm(x.barcode)===b)||(p&&norm(x.plu)===p);
   });
-  if(inv)return {type:b&&norm(inv.barcode)===b?'code':'plu',product:inv};
-  const cat=catalog.find(x=>(b&&norm(x.barcode)===b)||(p&&norm(x.plu)===p));
-  return cat?{type:b&&norm(cat.barcode)===b?'code':'plu',product:cat}:null;
+  return inv?{type:b&&norm(inv.barcode)===b?'code':'plu',product:inv}:null;
 }
 
 function daysLeft(dateStr){
@@ -428,16 +443,31 @@ function upsertCatalog(name='',barcode='',plu=''){
   }
   saveCatalog();return c;
 }
-function autoFill(){
-  const c=findCatalog($('name').value,$('barcode').value,$('plu').value);
-  if(!c)return;
-  if(!$('name').value&&c.name)$('name').value=c.name;
-  if(!$('barcode').value&&c.barcode)$('barcode').value=c.barcode;
-  if(!$('plu').value&&c.plu)$('plu').value=c.plu;
+function findInventoryMatch(name='',barcode='',plu=''){
+  const n=norm(name),b=norm(barcode),p=norm(plu);
+  return products.find(x=>
+    (n&&norm(x.name)===n)||
+    (b&&norm(x.barcode)===b)||
+    (p&&norm(x.plu)===p)
+  )||null;
 }
-$('name').oninput=autoFill;
-$('barcode').oninput=autoFill;
-$('plu').oninput=autoFill;
+function autoFill(source){
+  // Si el usuario borra un campo, no lo volvemos a rellenar automáticamente.
+  const value=$(source).value.trim();
+  if(!value)return;
+  const c=findInventoryMatch(
+    source==='name'?value:'',
+    source==='barcode'?value:'',
+    source==='plu'?value:''
+  );
+  if(!c)return;
+  if(source!=='name' && !$('name').value && c.name)$('name').value=c.name;
+  if(source!=='barcode' && !$('barcode').value && c.barcode)$('barcode').value=c.barcode;
+  if(source!=='plu' && !$('plu').value && c.plu)$('plu').value=c.plu;
+}
+$('name').oninput=()=>autoFill('name');
+$('barcode').oninput=()=>autoFill('barcode');
+$('plu').oninput=()=>autoFill('plu');
 
 window.edit=id=>{
   const p=products.find(x=>x.id===id);if(!p)return;
@@ -449,9 +479,24 @@ window.edit=id=>{
 
 window.removeProduct=id=>{
   if(confirm('¿Eliminar este producto?')){
+    const removed=products.find(p=>p.id===id);
     products=products.filter(p=>p.id!==id);
     mutedAlerts=mutedAlerts.filter(x=>x!==id);
     localStorage.setItem('vencimientos_no_mostrar',JSON.stringify(mutedAlerts));
+    if(removed){
+      catalog=catalog.filter(c=>{
+        const sameName=norm(c.name)===norm(removed.name);
+        const sameBarcode=!!removed.barcode&&norm(c.barcode)===norm(removed.barcode);
+        const samePlu=!!removed.plu&&norm(c.plu)===norm(removed.plu);
+        if(!sameName&&!sameBarcode&&!samePlu)return true;
+        return products.some(p=>
+          (sameName&&norm(p.name)===norm(removed.name))||
+          (sameBarcode&&p.barcode&&norm(p.barcode)===norm(removed.barcode))||
+          (samePlu&&p.plu&&norm(p.plu)===norm(removed.plu))
+        );
+      });
+      saveCatalog();
+    }
     saveData();render();
   }
 };
@@ -702,7 +747,11 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch
 if(!catalog.length&&products.length){
   products.forEach(p=>upsertCatalog(p.name||'',p.barcode||'',p.plu||''));
 }
+const inventoryKeys=new Set(products.flatMap(p=>[norm(p.name),norm(p.barcode),norm(p.plu)].filter(Boolean)));
+catalog=catalog.filter(c=>inventoryKeys.has(norm(c.name))||inventoryKeys.has(norm(c.barcode))||inventoryKeys.has(norm(c.plu)));
+saveCatalog();
 render();
+syncInventoryToEmailService();
 setTimeout(checkAlerts, 350);
 </script>
 </body>
