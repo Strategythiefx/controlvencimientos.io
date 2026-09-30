@@ -56,6 +56,18 @@ button:active{transform:translateY(1px)}
 .actions button{padding:7px 10px;font-size:11px}
 .empty{text-align:center;color:#94a3b8;padding:24px 5px}
 .note{font-size:12px;color:var(--muted);line-height:1.5}
+.email-status-toast{
+position:fixed;left:50%;top:18px;transform:translateX(-50%);
+z-index:1000;width:min(calc(100% - 28px),460px);
+padding:13px 15px;border-radius:13px;border:1px solid var(--line);
+background:var(--surface);color:var(--text);box-shadow:0 12px 35px rgba(15,23,42,.22);
+font-size:13px;font-weight:700;text-align:center;line-height:1.4
+}
+.email-status-toast.success{background:#eaf7ff;color:#1269a8;border-color:#8ed1ff}
+.email-status-toast.error{background:#fff0f7;color:#a51f52;border-color:#f0a8c1}
+.email-status-toast.info{background:var(--surface);color:var(--text)}
+body.dark .email-status-toast.success{background:#102c42;color:#70c8ff;border-color:#245b82}
+body.dark .email-status-toast.error{background:#351722;color:#ff9fbd;border-color:#6e3048}
 .hidden{display:none!important}
 .alert-banner{background:var(--warning-bg);color:var(--warning);border:1px solid #a9dcff;padding:11px 12px;border-radius:12px;margin-bottom:12px;font-size:12px}
 .alert-banner b{display:block;margin-bottom:4px;font-size:13px}
@@ -152,6 +164,7 @@ border-bottom:1px solid #111;box-sizing:border-box}
 .p-month{height:4.8mm;border:1px solid #111;border-bottom:0;display:grid;grid-template-columns:38mm 1fr;font-size:6.2px;font-weight:700}.p-month div{display:flex;align-items:center;padding-left:2.5mm}.p-month div+div{border-left:1px solid #111}.p-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:7.3px}.p-table th,.p-table td{border:1px solid #111;padding:0 1.2mm;text-align:center;box-sizing:border-box}.p-table th{font-weight:700;height:6mm;line-height:1.0}.p-table thead tr:nth-child(2) th{height:4.5mm}.p-table tbody td{height:8.8mm}.p-table td.prod{text-align:left;overflow:hidden;white-space:nowrap}.p-table col.c-day{width:7%}.p-table col.c-ean{width:13%}.p-table col.c-prod{width:17%}.p-table col.c-qty{width:8%}.p-table col.c-vd,.p-table col.c-vm,.p-table col.c-rd,.p-table col.c-rm{width:5.5%}.p-table col.c-plan{width:18%}.p-table col.c-resp{width:15%}.p-bottom{border:1px solid #111;border-top:0;font-size:7px;font-weight:700}.p-bottom-row{height:6.3mm;border-top:1px solid #111;display:flex;align-items:center;padding:0 2mm}.p-bottom-row:first-child{border-top:0}.p-bottom-row.obs{height:13mm;align-items:flex-start;padding-top:1.5mm}@page{size:A4 portrait;margin:0}</style>
 </head>
 <body>
+<div id="emailStatusToast" class="email-status-toast hidden" role="status" aria-live="polite"></div>
 <header>
   <h1>📦 Vencimientos</h1>
   <div class="menu-container">
@@ -159,7 +172,7 @@ border-bottom:1px solid #111;box-sizing:border-box}
     <div class="dropdown-menu" id="dropdownMenu">
       <button class="theme-toggle" id="themeToggle"><span>🌙 Modo oscuro</span><span class="theme-state" id="themeState"></span></button>
       <button class="dropdown-item" id="menuScanMode">⚙️ Modo de Escáner</button>
-      <button class="dropdown-item" id="menuNotify">📧 Enviar alerta por correo</button>
+      <button class="dropdown-item" id="menuNotify">🔔 Probar alerta</button>
       <button class="dropdown-item" id="menuBackup">☁️ Copia de Seguridad</button>
       <button class="dropdown-item" id="menuPrintInventory">🖨️ Imprimir inventario</button>
     </div>
@@ -325,15 +338,34 @@ function saveData(){
   syncInventoryToEmailService();
 }
 
-const EMAIL_ALERT_WEBHOOK='PEGAR_AQUI_URL_DE_APPS_SCRIPT';
+const EMAIL_ALERT_WEBHOOK='https://script.google.com/macros/s/AKfycbzIcUoVT0SnCmR3K52odcxzkr_N4D_De7oXM1RA21d6vrWk1C0igTJdlYMtze95fXG9/exec';
+const EMAIL_SITE_ID=(location.hostname+'|'+location.pathname).replace(/[^a-zA-Z0-9._-]/g,'_').slice(0,120);
 const EMAIL_SYNC_KEY='ultima_sincronizacion_correo_v1';
 function syncInventoryToEmailService(){
-  if(!EMAIL_ALERT_WEBHOOK || EMAIL_ALERT_WEBHOOK.includes('PEGAR_AQUI')) return;
+  if(!EMAIL_ALERT_WEBHOOK) return;
   try{
-    const payload={token:'CARULLA_ALERTAS_V1',inventory:products.map(p=>({id:p.id,name:p.name||'',barcode:p.barcode||'',plu:p.plu||'',qty:p.qty,date:p.date||''}))};
-    fetch(EMAIL_ALERT_WEBHOOK,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),keepalive:true})
-      .then(()=>localStorage.setItem(EMAIL_SYNC_KEY,new Date().toISOString())).catch(()=>{});
-  }catch(e){}
+    const payload={
+      token:'CARULLA_ALERTAS_V1',
+      siteId:EMAIL_SITE_ID,
+      inventory:products.map(p=>({
+        id:p.id,
+        name:p.name||'',
+        barcode:p.barcode||'',
+        plu:p.plu||'',
+        qty:p.qty,
+        date:p.date||''
+      }))
+    };
+    fetch(EMAIL_ALERT_WEBHOOK,{
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify(payload),
+      keepalive:true
+    }).catch(e=>console.error('Sincronización de correo:',e));
+  }catch(e){
+    console.error('Sincronización de correo:',e);
+  }
 }
 
 function findDuplicateProduct({barcode,plu,ignoreId=null}){
@@ -616,17 +648,145 @@ $('expiryOverlay').addEventListener('click',e=>{
   if(e.target===$('expiryOverlay')) closeExpiryPopup();
 });
 
-async function requestAndNotify(){
-  // La alerta de prueba ahora usa la misma ventana emergente minimalista.
-  const test={
-    id:'__test__',
-    name:'Ejemplo de producto',
-    qty:3,
-    date:new Date().toISOString().slice(0,10)
-  };
-  alertQueue.push({product:test,index:0});
-  showNextExpiryPopup();
+function showEmailStatus(type,message){
+  const el=$('emailStatusToast');
+  if(!el) return;
+  el.className='email-status-toast '+type;
+  el.textContent=message;
+  clearTimeout(window.__emailStatusTimer);
+  window.__emailStatusTimer=setTimeout(()=>{
+    el.classList.add('hidden');
+  },7000);
 }
+
+function getRequestId_(){
+  if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+}
+
+function checkEmailRequestStatus_(requestId,attempt){
+  attempt=attempt||0;
+  return new Promise(resolve=>{
+    const callbackName='__carullaEmailStatus_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    let finished=false;
+    const script=document.createElement('script');
+
+    const cleanup=()=>{
+      if(finished) return;
+      finished=true;
+      try{ delete window[callbackName]; }catch(e){ window[callbackName]=undefined; }
+      if(script.parentNode) script.parentNode.removeChild(script);
+    };
+
+    window[callbackName]=(result)=>{
+      cleanup();
+      if(result && result.found){
+        resolve(result);
+      }else if(attempt<8){
+        setTimeout(()=>checkEmailRequestStatus_(requestId,attempt+1).then(resolve),800);
+      }else{
+        resolve({found:false,ok:false,error:'No se recibió confirmación del servidor.'});
+      }
+    };
+
+    script.onerror=()=>{
+      cleanup();
+      if(attempt<8){
+        setTimeout(()=>checkEmailRequestStatus_(requestId,attempt+1).then(resolve),800);
+      }else{
+        resolve({found:false,ok:false,error:'No se pudo comprobar la respuesta del servidor.'});
+      }
+    };
+
+    script.src=EMAIL_ALERT_WEBHOOK+
+      '?action=status&token='+encodeURIComponent('CARULLA_ALERTAS_V1')+
+      '&requestId='+encodeURIComponent(requestId)+
+      '&callback='+encodeURIComponent(callbackName)+
+      '&_='+Date.now();
+
+    document.head.appendChild(script);
+  });
+}
+
+async function requestAndNotify(){
+  if(!EMAIL_ALERT_WEBHOOK){
+    showEmailStatus('error','❌ No está configurada la dirección de Apps Script.');
+    return;
+  }
+
+  if(!products.length){
+    showEmailStatus('info','ℹ️ No hay productos en el inventario para revisar.');
+    return;
+  }
+
+  const button=$('menuNotify');
+  const oldText=button ? button.textContent : '';
+  const requestId=getRequestId_();
+
+  const payload={
+    token:'CARULLA_ALERTAS_V1',
+    siteId:EMAIL_SITE_ID,
+    requestId:requestId,
+    inventory:products.map(p=>({
+      id:p.id,
+      name:p.name||'',
+      barcode:p.barcode||'',
+      plu:p.plu||'',
+      qty:p.qty,
+      date:p.date||''
+    })),
+    action:'sendAlert',
+    manual:true
+  };
+
+  try{
+    if(button){
+      button.disabled=true;
+      button.textContent='📧 Enviando...';
+    }
+
+    showEmailStatus('info','📨 Enviando solicitud al servidor...');
+
+    await fetch(EMAIL_ALERT_WEBHOOK,{
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify(payload),
+      keepalive:true
+    });
+
+    showEmailStatus('info','⏳ El servidor recibió la solicitud. Comprobando resultado...');
+
+    const result=await checkEmailRequestStatus_(requestId,0);
+
+    if(result && result.ok && result.sent){
+      showEmailStatus(
+        'success',
+        '✅ CORREO ENVIADO. Se enviaron '+result.count+' producto(s) nuevo(s).'
+      );
+    }else if(result && result.ok && result.sent===false){
+      showEmailStatus(
+        'info',
+        'ℹ️ NO SE ENVIÓ CORREO: '+(result.message || 'no había productos nuevos para enviar.')
+      );
+    }else{
+      showEmailStatus(
+        'error',
+        '❌ ERROR: '+((result && result.error) || 'El servidor no confirmó el envío.')
+      );
+    }
+
+  }catch(err){
+    console.error('Error enviando alerta:',err);
+    showEmailStatus('error','❌ No se pudo enviar la solicitud: '+(err.message||err));
+  }finally{
+    if(button){
+      button.disabled=false;
+      button.textContent=oldText || '🔔 Probar alerta';
+    }
+  }
+}
+
 
 function checkAlerts(){
   const soon=products
