@@ -159,7 +159,8 @@ border-bottom:1px solid #111;box-sizing:border-box}
     <div class="dropdown-menu" id="dropdownMenu">
       <button class="theme-toggle" id="themeToggle"><span>🌙 Modo oscuro</span><span class="theme-state" id="themeState"></span></button>
       <button class="dropdown-item" id="menuScanMode">⚙️ Modo de Escáner</button>
-      <button class="dropdown-item" id="menuNotify">🔔 Probar alerta</button>
+      <button class="dropdown-item" id="menuNotify">📧 Enviar alerta por correo</button>
+      <div id="emailAutoInfo" style="padding:8px 14px;font-size:12px;opacity:.7;line-height:1.35;">Automático: Apps Script revisa los productos y controla los envíos.</div>
       <button class="dropdown-item" id="menuBackup">☁️ Copia de Seguridad</button>
       <button class="dropdown-item" id="menuPrintInventory">🖨️ Imprimir inventario</button>
     </div>
@@ -646,10 +647,18 @@ async function requestAndNotify(){
 
   try{
     await syncInventoryToEmailService('sendAlert');
-    alert('📧 Solicitud enviada correctamente.\n\nGoogle Apps Script comprobará los productos dentro de los próximos 30 días y enviará el correo si corresponde.');
+
+    alert(
+      '📧 Solicitud de alerta enviada.\n\n' +
+      'Google Apps Script recibió la solicitud y comprobará los productos próximos a vencer.\n\n' +
+      'Si hay productos nuevos dentro de 30 días, enviará el correo a Gerencia670@grupo-exito.com.'
+    );
   }catch(error){
     console.error(error);
-    alert('❌ No se pudo enviar la solicitud.\n\nComprueba tu conexión a Internet y vuelve a intentarlo.');
+    alert(
+      '❌ No se pudo enviar la solicitud.\n\n' +
+      'Comprueba tu conexión a Internet y vuelve a intentarlo.'
+    );
   }finally{
     if(button) button.disabled=false;
   }
