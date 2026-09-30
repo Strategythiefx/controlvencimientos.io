@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="es">
 <head>
@@ -277,6 +276,12 @@ border-bottom:1px solid #111;box-sizing:border-box}
 </div>
 
 <script>
+const SITE_ID = (() => {
+  const path = window.location.pathname.toLowerCase();
+  if(path.startsWith('/controlvencimientos.io/')) return 'strategythiefx_controlvencimientos_io';
+  if(path.startsWith('/vencimiento.io/')) return 'strategythiefx_vencimiento_io';
+  return (window.location.hostname + window.location.pathname).replace(/[^a-zA-Z0-9._-]/g,'_');
+})();
 const KEY='control_vencimientos_v1_'+SITE_ID;
 let products=JSON.parse(localStorage.getItem(KEY)||'[]');
 let editing=null;
@@ -329,13 +334,6 @@ function saveData(){
 const EMAIL_ALERT_WEBHOOK='https://script.google.com/macros/s/AKfycbzIcUoVT0SnCmR3K52odcxzkr_N4D_De7oXM1RA21d6vrWk1C0igTJdlYMtze95fXG9/exec';
 const EMAIL_SYNC_KEY='ultima_sincronizacion_correo_v1';
 
-const SITE_ID = (() => {
-  const path = window.location.pathname.toLowerCase();
-  if(path.startsWith('/controlvencimientos.io/')) return 'strategythiefx_controlvencimientos_io';
-  if(path.startsWith('/vencimiento.io/')) return 'strategythiefx_vencimiento_io';
-  return (window.location.hostname + window.location.pathname).replace(/[^a-zA-Z0-9._-]/g,'_');
-})();
-
 function syncInventoryToEmailService(action='sync'){
   if(!EMAIL_ALERT_WEBHOOK) return Promise.resolve();
   const payload={
@@ -353,9 +351,7 @@ function syncInventoryToEmailService(action='sync'){
     headers:{'Content-Type':'text/plain;charset=utf-8'},
     body:JSON.stringify(payload),
     keepalive:true
-  }).then(()=>{
-    localStorage.setItem(EMAIL_SYNC_KEY,new Date().toISOString());
-  });
+  }).then(()=>localStorage.setItem(EMAIL_SYNC_KEY,new Date().toISOString()));
 }
 
 function findDuplicateProduct({barcode,plu,ignoreId=null}){
@@ -645,7 +641,7 @@ async function requestAndNotify(){
     return;
   }
 
-  const button=document.getElementById('menuNotify');
+  const button=$('menuNotify');
   if(button) button.disabled=true;
 
   try{
@@ -786,4 +782,4 @@ syncInventoryToEmailService();
 setTimeout(checkAlerts, 350);
 </script>
 </body>
-  </html>
+</html>
