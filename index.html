@@ -159,7 +159,7 @@ border-bottom:1px solid #111;box-sizing:border-box}
     <div class="dropdown-menu" id="dropdownMenu">
       <button class="theme-toggle" id="themeToggle"><span>🌙 Modo oscuro</span><span class="theme-state" id="themeState"></span></button>
       <button class="dropdown-item" id="menuScanMode">⚙️ Modo de Escáner</button>
-      <button class="dropdown-item" id="menuNotify">📧 Enviar alerta por correo</button>
+      <button class="dropdown-item" id="menuNotify">🔔 Probar alerta</button>
       <button class="dropdown-item" id="menuBackup">☁️ Copia de Seguridad</button>
       <button class="dropdown-item" id="menuPrintInventory">🖨️ Imprimir inventario</button>
     </div>
@@ -326,27 +326,33 @@ function saveData(){
 }
 
 const EMAIL_ALERT_WEBHOOK='https://script.google.com/macros/s/AKfycbzIcUoVT0SnCmR3K52odcxzkr_N4D_De7oXM1RA21d6vrWk1C0igTJdlYMtze95fXG9/exec';
-const EMAIL_SITE_ID=(location.hostname+'|'+location.pathname).replace(/[^a-zA-Z0-9._-]/g,'_').slice(0,120);
 const EMAIL_SYNC_KEY='ultima_sincronizacion_correo_v1';
+const EMAIL_SITE_ID=(location.hostname+'|'+location.pathname).replace(/[^a-zA-Z0-9._-]/g,'_').slice(0,120);
+
+function buildEmailPayload(action,manual){
+  return {
+    token:'CARULLA_ALERTAS_V1',
+    siteId:EMAIL_SITE_ID,
+    inventory:products.map(p=>({
+      id:p.id,name:p.name||'',barcode:p.barcode||'',plu:p.plu||'',
+      qty:p.qty,date:p.date||''
+    })),
+    action:action||undefined,
+    manual:manual===true
+  };
+}
+
 function syncInventoryToEmailService(){
   if(!EMAIL_ALERT_WEBHOOK) return;
   try{
-    const payload={
-      token:'CARULLA_ALERTAS_V1',
-      siteId:EMAIL_SITE_ID,
-      inventory:products.map(p=>({
-        id:p.id,name:p.name||'',barcode:p.barcode||'',plu:p.plu||'',
-        qty:p.qty,date:p.date||''
-      }))
-    };
     fetch(EMAIL_ALERT_WEBHOOK,{
       method:'POST',mode:'no-cors',
       headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify(payload),keepalive:true
-    }).then(()=>{
-      localStorage.setItem(EMAIL_SYNC_KEY,new Date().toISOString());
-    }).catch(()=>{});
-  }catch(e){}
+      body:JSON.stringify(buildEmailPayload()),
+      keepalive:true
+    }).then(()=>localStorage.setItem(EMAIL_SYNC_KEY,new Date().toISOString()))
+      .catch(err=>console.error('Error sincronizando inventario:',err));
+  }catch(e){console.error('Error preparando sincronización:',e);}
 }
 
 function findDuplicateProduct({barcode,plu,ignoreId=null}){
@@ -630,52 +636,50 @@ $('expiryOverlay').addEventListener('click',e=>{
 });
 
 async function requestAndNotify(){
-  const button=document.querySelector('#menuNotify');
-  const originalText=button ? button.textContent : '';
-
+  if(!EMAIL_ALERT_WEBHOOK){
+    alert('❌ El servicio de correo no está configurado.');
+    return;
+  }
   if(!products.length){
     alert('No hay productos en el inventario para revisar.');
     return;
   }
 
-  const payload={
-    token:'CARULLA_ALERTAS_V1',
-    siteId:EMAIL_SITE_ID,
-    inventory:products.map(p=>({
-      id:p.id,name:p.name||'',barcode:p.barcode||'',plu:p.plu||'',
-      qty:p.qty,date:p.date||''
-    })),
-    action:'sendAlert',
-    manual:true
-  };
+  const button=$('menuNotify');
+  const oldText=button ? button.textContent : '';
 
   try{
-    if(button){button.disabled=true;button.textContent='📧 Enviando...';}
+    if(button){
+      button.disabled=true;
+      button.textContent='📧 Enviando...';
+    }
 
     await fetch(EMAIL_ALERT_WEBHOOK,{
       method:'POST',
       mode:'no-cors',
       headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify(payload),
+      body:JSON.stringify(buildEmailPayload('sendAlert',true)),
       keepalive:true
     });
 
     localStorage.setItem(EMAIL_SYNC_KEY,new Date().toISOString());
 
     alert(
-      '📧 Solicitud enviada al servicio de alertas.\n\n' +
-      'Apps Script comprobará los productos dentro de los próximos 30 días y enviará el correo si hay productos nuevos.'
+      '📧 Solicitud enviada a Apps Script.\n\n' +
+      'El servidor comprobará los productos dentro de los próximos 30 días y enviará ' +
+      'los productos nuevos que todavía no hayan sido enviados.'
     );
   }catch(err){
-    console.error(err);
-    alert('❌ No se pudo enviar la solicitud al servicio de alertas.');
+    console.error('Error enviando alerta:',err);
+    alert('❌ No se pudo enviar la solicitud de alerta.');
   }finally{
     if(button){
       button.disabled=false;
-      button.textContent=originalText || '📧 Enviar alerta por correo';
+      button.textContent=oldText || '📧 Enviar alerta por correo';
     }
   }
 }
+
 
 function checkAlerts(){
   const soon=products
