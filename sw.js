@@ -1,4 +1,4 @@
-const CACHE = 'vencimientos-v27';
+const CACHE = 'vencimientos-v28';
 
 const ASSETS = [
   './',
@@ -30,8 +30,32 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Las peticiones de la página siempre intentan obtener
-// primero la versión actual de Internet.
+// Manejo de notificaciones en segundo plano
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+
+  event.waitUntil(
+    self.clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true
+    }).then(clients => {
+
+      for (const client of clients) {
+        if ('focus' in client) {
+          return client.focus();
+        }
+      }
+
+      if (self.clients.openWindow) {
+        return self.clients.openWindow('./index.html');
+      }
+
+    })
+  );
+});
+
+// Las peticiones de la página intentan primero obtener
+// la versión actual de Internet.
 self.addEventListener('fetch', event => {
 
   // Nunca guardar ni servir sw.js desde caché
@@ -45,6 +69,7 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(event.request)
         .then(response => {
+
           const copy = response.clone();
 
           caches.open(CACHE).then(cache => {
@@ -53,7 +78,9 @@ self.addEventListener('fetch', event => {
 
           return response;
         })
-        .catch(() => caches.match('./index.html'))
+        .catch(() => {
+          return caches.match('./index.html');
+        })
     );
 
     return;
@@ -66,6 +93,8 @@ self.addEventListener('fetch', event => {
       .then(response => {
         return response;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() => {
+        return caches.match(event.request);
+      })
   );
 });
