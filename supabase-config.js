@@ -1,7 +1,4 @@
-// Supabase configuration for GitHub Pages.
-// The Publishable key is safe to expose in a browser when RLS is configured.
-// NEVER put a service_role/secret key here.
-window.SUPABASE_CONFIG = {
-  url: 'https://slxevtelirnurrnhqxkj.supabase.co',
-  publishableKey: 'sb_publishable_KBMVYMTJVA7WSLFG2o6t4Q_QDZWbrJc'
-};
+// Configuración pública de Supabase para GitHub Pages.
+// No coloques aquí una service_role key ni una secret key.
+window.SUPABASE_URL='https://slxevtelirnurrnhqxkj.supabase.co';
+window.SUPABASE_PUBLISHABLE_KEY='sb_publishable_KBMVYMTJVA7WSLFG2o6t4Q_QDZWbrJc';
