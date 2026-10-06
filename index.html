@@ -1862,6 +1862,40 @@ body:not(.dark) .sa-admin{color:#1b2939}.sa-admin-box{background:rgba(255,255,25
 <style id="logout-ui">
 .sa-force-logout{position:fixed;right:18px;top:18px;z-index:9999;padding:8px 12px!important}
 </style>
+
+<style id="visible-logout">
+.sa-account-bar{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  gap:10px!important;
+  width:100%!important;
+  box-sizing:border-box!important;
+  padding:10px 14px!important;
+  margin:0 0 12px 0!important;
+  position:relative!important;
+  z-index:1000!important;
+  border-bottom:1px solid rgba(255,255,255,.08)!important;
+  background:rgba(20,20,24,.72)!important;
+  backdrop-filter:blur(10px)!important;
+}
+.sa-account-bar span{
+  font-size:11px!important;
+  opacity:.72!important;
+}
+.sa-account-bar button{
+  display:inline-flex!important;
+  visibility:visible!important;
+  opacity:1!important;
+  cursor:pointer!important;
+  padding:8px 12px!important;
+  border-radius:8px!important;
+  border:1px solid rgba(255,255,255,.12)!important;
+  background:rgba(255,255,255,.06)!important;
+  color:inherit!important;
+}
+.sa-account-bar button:hover{background:rgba(255,255,255,.11)!important}
+</style>
 </head>
 <body><div id="saAuth" class="sa-auth"><div class="sa-auth-card"><div class="sa-auth-mark">◈</div><div class="section-index">CONTROL DE VENCIMIENTOS</div><h2 id="saTitle">Iniciar sesión</h2><p id="saIntro">Accede a tu inventario.</p><label>Correo</label><input id="saEmail" type="email" autocomplete="username" placeholder="correo@ejemplo.com"><label>Contraseña</label><input id="saPassword" type="password" autocomplete="current-password" placeholder="••••••••"><button id="saLogin" class="primary" type="button">Iniciar sesión</button><div class="sa-login-note">El acceso es mediante usuarios creados por el administrador.</div>
 <div class="sa-fixed-login">
@@ -1874,7 +1908,7 @@ body:not(.dark) .sa-admin{color:#1b2939}.sa-admin-box{background:rgba(255,255,25
     <button type="button" data-login-email="bodega1@jumail.com">Bodega</button>
   </div>
 </div>
-<div id="saMsg"></div></div></div><div id="saAccount"><span id="saAccountEmail"></span><button id="saLogout" class="secondary">Cerrar sesión</button></div><div id="emailStatusToast" class="email-status-toast hidden" role="status" aria-live="polite"></div>
+<div id="saMsg"></div></div></div><div id="saAccount" class="sa-account-bar"><span id="saAccountEmail"></span><button id="saLogout" type="button">Cerrar sesión</button></div><button id="saLogout" class="secondary">Cerrar sesión</button></div><div id="emailStatusToast" class="email-status-toast hidden" role="status" aria-live="polite"></div>
 <header class="app-header"><button id="simpleModeToggle" class="simple-mode-toggle" type="button">◐ <span id="simpleModeToggleText">Modo simple</span></button>
   <div class="brand-wrap">
     <div class="brand-mark">◈</div>
