@@ -1823,7 +1823,13 @@ body:not(.dark):not(.simple-mode) .macro-help{
 }
 </style>
 
-<script src="./supabase-config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="./supabase-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+if(!window.supabase){
+  document.write('<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"><\\/script>');
+}
+</script>
 <style id="supabase-admin-ui">
 .sa-auth{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;background:#080b12;color:#eef5fb}
 .sa-auth.hidden{display:none!important}.sa-auth-card{width:min(410px,100%);padding:30px;border-radius:20px;background:rgba(17,23,34,.95);border:1px solid rgba(255,255,255,.09);box-shadow:0 25px 80px #0008}.sa-auth-card h2{margin:8px 0}.sa-auth-card p{color:#8190a2;font-size:11px}.sa-auth-card label{display:block;font-size:9px;color:#8190a2;margin:12px 0 5px}.sa-auth-card input{height:42px}.sa-auth-card button{margin-top:10px;width:100%}.sa-auth-mark{font-size:24px;color:#70c8ff;margin-bottom:12px}.sa-auth-card #saMsg{text-align:center;min-height:18px;margin-top:10px;font-size:10px}.sa-auth-card #saMsg.err{color:#ff8da9}.sa-auth-card #saMsg.ok{color:#70dfa0}
@@ -1843,8 +1849,32 @@ body:not(.dark) .sa-admin{color:#1b2939}.sa-admin-box{background:rgba(255,255,25
 .sa-fixed-list span{font-size:8px;color:#8b99a9;padding:7px 8px;border-radius:8px;background:rgba(255,255,255,.025)}
 @media(max-width:600px){.sa-fixed-list{grid-template-columns:1fr}}
 </style>
+
+<style id="fixed-login-ui">
+.sa-auth-card #saLogin:disabled{opacity:.6;cursor:wait}
+.sa-fixed-login{margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06)}
+.sa-fixed-login-title{font-size:8px;letter-spacing:.16em;color:#66778c;margin-bottom:7px}
+.sa-fixed-login-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.sa-fixed-login-grid button{margin:0!important;width:100%!important;height:auto!important;padding:8px 6px!important;font-size:8px!important;color:#aebbd0!important;background:rgba(255,255,255,.025)!important;border:1px solid rgba(255,255,255,.07)!important}
+.sa-fixed-login-grid button:hover{border-color:rgba(112,200,255,.35)!important}
+@media(max-width:600px){.sa-fixed-login-grid{grid-template-columns:1fr}}
+</style>
+<style id="logout-ui">
+.sa-force-logout{position:fixed;right:18px;top:18px;z-index:9999;padding:8px 12px!important}
+</style>
 </head>
-<body><div id="saAuth" class="sa-auth"><div class="sa-auth-card"><div class="sa-auth-mark">◈</div><div class="section-index">CONTROL DE VENCIMIENTOS</div><h2 id="saTitle">Iniciar sesión</h2><p id="saIntro">Accede a tu inventario.</p><label>Correo</label><input id="saEmail" type="email" autocomplete="username" placeholder="correo@ejemplo.com"><label>Contraseña</label><input id="saPassword" type="password" autocomplete="current-password" placeholder="••••••••"><button id="saLogin" class="primary">Iniciar sesión</button><div class="sa-login-note">El acceso es mediante usuarios creados por el administrador.</div><div id="saMsg"></div></div></div><div id="saAccount"><span id="saAccountEmail"></span><button id="saLogout" class="secondary">Cerrar sesión</button></div><div id="emailStatusToast" class="email-status-toast hidden" role="status" aria-live="polite"></div>
+<body><div id="saAuth" class="sa-auth"><div class="sa-auth-card"><div class="sa-auth-mark">◈</div><div class="section-index">CONTROL DE VENCIMIENTOS</div><h2 id="saTitle">Iniciar sesión</h2><p id="saIntro">Accede a tu inventario.</p><label>Correo</label><input id="saEmail" type="email" autocomplete="username" placeholder="correo@ejemplo.com"><label>Contraseña</label><input id="saPassword" type="password" autocomplete="current-password" placeholder="••••••••"><button id="saLogin" class="primary" type="button">Iniciar sesión</button><div class="sa-login-note">El acceso es mediante usuarios creados por el administrador.</div>
+<div class="sa-fixed-login">
+  <div class="sa-fixed-login-title">ÁREA</div>
+  <div class="sa-fixed-login-grid">
+    <button type="button" data-login-email="lacteo1@jumail.com">Lácteos y embutidos</button>
+    <button type="button" data-login-email="dulcega@jumail.com">Harinas y dulces</button>
+    <button type="button" data-login-email="gaseo1@jumail.com">Gaseosas y snacks</button>
+    <button type="button" data-login-email="otros1@jumail.com">Otros</button>
+    <button type="button" data-login-email="bodega1@jumail.com">Bodega</button>
+  </div>
+</div>
+<div id="saMsg"></div></div></div><div id="saAccount"><span id="saAccountEmail"></span><button id="saLogout" class="secondary">Cerrar sesión</button></div><div id="emailStatusToast" class="email-status-toast hidden" role="status" aria-live="polite"></div>
 <header class="app-header"><button id="simpleModeToggle" class="simple-mode-toggle" type="button">◐ <span id="simpleModeToggleText">Modo simple</span></button>
   <div class="brand-wrap">
     <div class="brand-mark">◈</div>
@@ -3013,96 +3043,189 @@ setTimeout(macroRender,0);
 </script>
 <script id="supabase-system">
 (function(){
-const client=window.supabase.createClient(window.SUPABASE_URL,window.SUPABASE_PUBLISHABLE_KEY);
-window.supabaseClient=client; let role='user', selected=null;
+  const $=id=>document.getElementById(id);
+  const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  let client=null, role='user', selected=null;
 
-const $=id=>document.getElementById(id);
-const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
-const day=d=>d?Math.ceil((new Date(d+'T00:00:00')-new Date(new Date().toDateString()))/86400000):99999;
+  function msg(t,c=''){
+    const el=$('saMsg');
+    if(el){el.textContent=t;el.className=c;}
+  }
 
-function msg(t,c=''){ $('saMsg').textContent=t; $('saMsg').className=c; }
-function setMacroVisibility(){
-  const item=$('menuMacro'), section=document.querySelector('.macro-card'), quick=$('quickMacro');
-  if(item)item.style.display=role==='admin'?'flex':'none';
-  if(quick)quick.style.display=role==='admin'?'':'none';
-  if(section)section.style.display=role==='admin'?'':'none';
-}
+  function setMacroVisibility(){
+    const item=$('menuMacro'), section=document.querySelector('.macro-card'), quick=$('quickMacro');
+    if(item)item.style.display=role==='admin'?'':'none';
+    if(quick)quick.style.display=role==='admin'?'':'none';
+    if(section)section.style.display=role==='admin'?'':'none';
+  }
 
-async function profile(u){
-  const {data,error}=await client.from('profiles').select('role,full_name').eq('id',u.id).single();
-  if(error)throw error; return data;
-}
-async function showUser(u,p){
-  role=p.role||'user'; selected=null;
-  $('saAuth').classList.add('hidden'); $('saAccount').classList.add('show'); $('saAccountEmail').textContent=u.email||'';
-  setMacroVisibility();
-  const main=document.querySelector('main:not(#saAdmin)');
-  if(role==='admin'){ if(main)main.classList.add('hidden'); $('saAdmin').classList.remove('hidden'); await loadUsers(); }
-  else { $('saAdmin').classList.add('hidden'); if(main)main.classList.remove('hidden'); }
-}
-async function login(){
-  const email=$('saEmail').value.trim(), password=$('saPassword').value;
-  if(!email||!password){msg('Escribe correo y contraseña.','err');return}
-  msg('Iniciando sesión...');
-  const {data,error}=await client.auth.signInWithPassword({email,password});
-  if(error){msg(error.message,'err');return}
-  try{await showUser(data.user,await profile(data.user));}catch(e){console.error(e);msg('La sesión inició, pero no se pudo cargar el perfil.','err')}
-}
+  async function getProfile(user){
+    const r=await client.from('profiles').select('role,full_name').eq('id',user.id).maybeSingle();
+    if(r.error) throw r.error;
+    if(!r.data){
+      throw new Error('El usuario existe en Authentication, pero todavía no tiene perfil en public.profiles.');
+    }
+    return r.data;
+  }
 
-async function logout(){await client.auth.signOut();location.reload()}
+  async function enterApp(user,p){
+    role=p.role||'user';
+    selected=null;
+    $('saAuth')?.classList.add('hidden');
+    $('saAccount')?.classList.add('show');
+    if($('saAccountEmail'))$('saAccountEmail').textContent=user.email||'';
+    setMacroVisibility();
 
-async function loadUsers(){
-  const q=($('saSearch').value||'').trim();
-  const fixedNames=['Lácteos y embutidos','Harinas y dulces','Gaseosas y snacks','Otros','Bodega'];
-  let query=client.from('profiles').select('id,full_name,role,created_at').neq('role','admin').in('full_name',fixedNames).order('created_at',{ascending:true});
-  if(q)query=query.ilike('full_name','%'+q+'%');
-  const {data,error}=await query;
-  if(error){$('saUsers').innerHTML='<div class="sa-muted">No se pudieron cargar los usuarios.</div>';return}
-  $('saUserCount').textContent=`${data.length} usuario${data.length===1?'':'s'} registrado${data.length===1?'':'s'}`;
-  $('saUsers').innerHTML=data.map(u=>`<button class="sa-user ${selected?.id===u.id?'active':''}" data-id="${esc(u.id)}"><b>${esc(u.full_name||'Usuario sin nombre')}</b><small>Cuenta creada · ${new Date(u.created_at).toLocaleDateString('es-CO')}</small></button>`).join('')||'<div class="sa-muted">No hay usuarios comunes todavía.</div>';
-  $('saUsers').querySelectorAll('.sa-user').forEach(b=>b.onclick=()=>selectUser(b.dataset.id));
-}
-async function selectUser(id){
-  const {data,error}=await client.from('profiles').select('id,full_name,role,created_at').eq('id',id).single();
-  if(error)return;
-  selected=data; document.querySelectorAll('.sa-user').forEach(x=>x.classList.toggle('active',x.dataset.id===id));
-  $('saUserEmpty').classList.add('hidden'); $('saUserDetail').classList.remove('hidden');
-  $('saDetailName').textContent=data.full_name||'Usuario sin nombre'; $('saDetailId').textContent='Cuenta: '+data.id;
-  const {data:inv,error:e}=await client.from('products').select('expiry_date').eq('user_id',id);
-  if(e)return;
-  $('saDetailTotal').textContent=inv.length;
-  $('saDetailSoon').textContent=inv.filter(x=>day(x.expiry_date)>=0&&day(x.expiry_date)<=30).length;
-  $('saDetailExpired').textContent=inv.filter(x=>day(x.expiry_date)<0).length;
-}
-async function openInventory(){
-  if(!selected)return;
-  document.querySelectorAll('.sa-tab').forEach(x=>x.classList.toggle('active',x.dataset.tab==='inventory'));
-  $('saUsersTab').classList.add('hidden'); $('saInventoryTab').classList.remove('hidden');
-  const {data,error}=await client.from('products').select('*').eq('user_id',selected.id).order('expiry_date',{ascending:true});
-  if(error){$('saInvEmpty').textContent='No se pudo cargar el inventario.';return}
-  $('saInvEmpty').classList.add('hidden'); $('saInvView').classList.remove('hidden');
-  $('saInvName').textContent=selected.full_name||'Usuario'; $('saInvId').textContent='Cuenta: '+selected.id;
-  $('saInvTotal').textContent=data.length;
-  $('saInvSoon').textContent=data.filter(x=>day(x.expiry_date)>=0&&day(x.expiry_date)<=30).length;
-  $('saInvExpired').textContent=data.filter(x=>day(x.expiry_date)<0).length;
-  $('saInvRows').innerHTML=data.length?data.map(p=>`<tr><td>${esc(p.name)}</td><td>${esc(p.plu||p.barcode||'—')}</td><td>${esc(p.quantity)}</td><td>${p.expiry_date?new Date(p.expiry_date+'T00:00:00').toLocaleDateString('es-CO'):'—'}</td></tr>`).join(''):'<tr><td colspan="4">Inventario vacío.</td></tr>';
-}
-function tabs(){
-  document.querySelectorAll('.sa-tab').forEach(t=>t.onclick=async()=>{
-    document.querySelectorAll('.sa-tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');
-    const users=t.dataset.tab==='users';$('saUsersTab').classList.toggle('hidden',!users);$('saInventoryTab').classList.toggle('hidden',users);
-    if(!users&&selected)await openInventory();
-  });
-}
-$('saLogin').onclick=login;$('saLogout').onclick=logout;$('saSearch').oninput=loadUsers;$('saRefresh').onclick=loadUsers;$('saViewInventory').onclick=openInventory;tabs();
+    const main=document.querySelector('main');
+    if(role==='admin'){
+      main?.classList.add('hidden');
+      $('saAdmin')?.classList.remove('hidden');
+      await loadUsers();
+    }else{
+      $('saAdmin')?.classList.add('hidden');
+      main?.classList.remove('hidden');
+    }
+  }
 
-(async function boot(){
-  try{
-    const {data}=await client.auth.getSession();
-    if(data.session)await showUser(data.session.user,await profile(data.session.user));
-    else $('saAuth').classList.remove('hidden');
-  }catch(e){console.error(e);msg('No se pudo conectar con Supabase.','err')}
-})();
+  async function login(){
+    const email=$('saEmail')?.value.trim();
+    const password=$('saPassword')?.value||'';
+    if(!email||!password){msg('Escribe correo y contraseña.','err');return;}
+
+    const b=$('saLogin');
+    if(b){b.disabled=true;b.textContent='Entrando...';}
+    msg('Conectando con Supabase...');
+
+    try{
+      if(!window.supabase) throw new Error('La biblioteca de Supabase no cargó. Recarga la página.');
+      if(!window.SUPABASE_URL||!window.SUPABASE_PUBLISHABLE_KEY) throw new Error('Falta la configuración de Supabase.');
+
+      if(!client) client=window.supabase.createClient(window.SUPABASE_URL,window.SUPABASE_PUBLISHABLE_KEY);
+
+      const {data,error}=await client.auth.signInWithPassword({email,password});
+      if(error){
+        let t=error.message||'No se pudo iniciar sesión.';
+        if(error.message==='Invalid login credentials') t='Correo o contraseña incorrectos.';
+        if(/not confirmed/i.test(t)) t='El usuario no está confirmado en Supabase. En Authentication > Users, confirma el correo.';
+        msg(t,'err');
+        return;
+      }
+      if(!data?.user) throw new Error('Supabase no devolvió ningún usuario.');
+
+      const p=await getProfile(data.user);
+      msg('Sesión iniciada.','ok');
+      await enterApp(data.user,p);
+    }catch(e){
+      console.error(e);
+      msg(e?.message||'No se pudo iniciar sesión.','err');
+    }finally{
+      if(b){b.disabled=false;b.textContent='Iniciar sesión';}
+    }
+  }
+
+  async function logout(){
+    const b=$('saLogout');
+    if(b){b.disabled=true;b.textContent='Cerrando sesión...';}
+    try{
+      if(client) await client.auth.signOut();
+      $('saAccount')?.classList.remove('show');
+      $('saAdmin')?.classList.add('hidden');
+      document.querySelector('main')?.classList.add('hidden');
+      $('saAuth')?.classList.remove('hidden');
+      if($('saPassword'))$('saPassword').value='';
+      msg('Sesión cerrada.','ok');
+    }catch(e){
+      console.error(e);msg(e?.message||'No se pudo cerrar la sesión.','err');
+    }finally{
+      if(b){b.disabled=false;b.textContent='Cerrar sesión';}
+    }
+  }
+
+  async function loadUsers(){
+    const q=($('saSearch')?.value||'').trim();
+    const fixedNames=['Lácteos y embutidos','Harinas y dulces','Gaseosas y snacks','Otros','Bodega'];
+    let query=client.from('profiles').select('id,full_name,role,created_at').neq('role','admin').in('full_name',fixedNames).order('created_at',{ascending:true});
+    if(q)query=query.ilike('full_name','%'+q+'%');
+    const {data,error}=await query;
+    if(error){$('saUsers').innerHTML='<div class="sa-muted">'+esc(error.message)+'</div>';return;}
+    $('saUserCount').textContent=`${data.length} usuario${data.length===1?'':'s'} registrado${data.length===1?'':'s'}`;
+    $('saUsers').innerHTML=data.map(u=>`<button type="button" class="sa-user ${selected?.id===u.id?'active':''}" data-id="${esc(u.id)}"><b>${esc(u.full_name||'Usuario sin nombre')}</b><small>Cuenta creada · ${new Date(u.created_at).toLocaleDateString('es-CO')}</small></button>`).join('')||'<div class="sa-muted">No hay usuarios comunes todavía.</div>';
+    $('saUsers').querySelectorAll('.sa-user').forEach(b=>b.onclick=()=>selectUser(b.dataset.id));
+  }
+
+  async function selectUser(id){
+    const {data,error}=await client.from('profiles').select('id,full_name,role,created_at').eq('id',id).single();
+    if(error)return;
+    selected=data;
+    document.querySelectorAll('.sa-user').forEach(x=>x.classList.toggle('active',x.dataset.id===id));
+    $('saUserEmpty')?.classList.add('hidden');$('saUserDetail')?.classList.remove('hidden');
+    $('saDetailName').textContent=data.full_name||'Usuario sin nombre';$('saDetailId').textContent='Cuenta: '+data.id;
+    const {data:inv,error:e}=await client.from('products').select('expiry_date').eq('user_id',id);
+    if(e)return;
+    $('saDetailTotal').textContent=inv.length;
+    const today=new Date(new Date().toDateString());
+    const d=x=>x?Math.ceil((new Date(x+'T00:00:00')-today)/86400000):99999;
+    $('saDetailSoon').textContent=inv.filter(x=>d(x.expiry_date)>=0&&d(x.expiry_date)<=30).length;
+    $('saDetailExpired').textContent=inv.filter(x=>d(x.expiry_date)<0).length;
+  }
+
+  async function openInventory(){
+    if(!selected)return;
+    document.querySelectorAll('.sa-tab').forEach(x=>x.classList.toggle('active',x.dataset.tab==='inventory'));
+    $('saUsersTab')?.classList.add('hidden');$('saInventoryTab')?.classList.remove('hidden');
+    const {data,error}=await client.from('products').select('*').eq('user_id',selected.id).order('expiry_date',{ascending:true});
+    if(error){$('saInvEmpty').textContent=error.message;return;}
+    $('saInvEmpty')?.classList.add('hidden');$('saInvView')?.classList.remove('hidden');
+    $('saInvName').textContent=selected.full_name||'Usuario';$('saInvId').textContent='Cuenta: '+selected.id;
+    $('saInvTotal').textContent=data.length;
+    const today=new Date(new Date().toDateString()), d=x=>x?Math.ceil((new Date(x+'T00:00:00')-today)/86400000):99999;
+    $('saInvSoon').textContent=data.filter(x=>d(x.expiry_date)>=0&&d(x.expiry_date)<=30).length;
+    $('saInvExpired').textContent=data.filter(x=>d(x.expiry_date)<0).length;
+    $('saInvRows').innerHTML=data.length?data.map(p=>`<tr><td>${esc(p.name)}</td><td>${esc(p.plu||p.barcode||'—')}</td><td>${esc(p.quantity)}</td><td>${p.expiry_date?new Date(p.expiry_date+'T00:00:00').toLocaleDateString('es-CO'):'—'}</td></tr>`).join(''):'<tr><td colspan="4">Inventario vacío.</td></tr>';
+  }
+
+  function bind(){
+    $('saLogin')?.addEventListener('click',login);
+    $('saLogout')?.addEventListener('click',logout);
+    $('saPassword')?.addEventListener('keydown',e=>{if(e.key==='Enter')login();});
+    document.querySelectorAll('[data-login-email]').forEach(b=>b.addEventListener('click',()=>{
+      $('saEmail').value=b.dataset.loginEmail||'';$('saPassword').focus();msg('Correo seleccionado. Escribe la contraseña.');
+    }));
+    $('saSearch')?.addEventListener('input',loadUsers);
+    $('saRefresh')?.addEventListener('click',loadUsers);
+    $('saViewInventory')?.addEventListener('click',openInventory);
+    document.querySelectorAll('.sa-tab').forEach(t=>t.addEventListener('click',async()=>{
+      document.querySelectorAll('.sa-tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');
+      const users=t.dataset.tab==='users';$('saUsersTab')?.classList.toggle('hidden',!users);$('saInventoryTab')?.classList.toggle('hidden',users);
+      if(!users&&selected)await openInventory();
+    }));
+  }
+
+  async function boot(){
+    try{
+      if(!window.supabase) throw new Error('La biblioteca de Supabase no cargó. Recarga la página.');
+      client=window.supabase.createClient(window.SUPABASE_URL,window.SUPABASE_PUBLISHABLE_KEY);
+      const {data,error}=await client.auth.getSession();
+      if(error)throw error;
+      if(data.session){
+        const p=await getProfile(data.session.user);
+        await enterApp(data.session.user,p);
+      }else{
+        $('saAuth')?.classList.remove('hidden');
+      }
+    }catch(e){
+      console.error('Supabase:',e);
+      $('saAuth')?.classList.remove('hidden');
+      msg(e?.message||'No se pudo conectar con Supabase.','err');
+    }
+  }
+
+  function start(){
+    bind();
+    boot();
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});
+  else start();
 })();
 </script>
 </body>
