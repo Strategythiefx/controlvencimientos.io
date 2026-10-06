@@ -1,4 +1,4 @@
-const CACHE='vencimientos-v31';
+const CACHE='vencimientos-v32';
 
 const ASSETS=[
   './',
