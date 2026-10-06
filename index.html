@@ -1908,7 +1908,7 @@ body:not(.dark) .sa-admin{color:#1b2939}.sa-admin-box{background:rgba(255,255,25
     <button type="button" data-login-email="bodega1@jumail.com">Bodega</button>
   </div>
 </div>
-<div id="saMsg"></div></div></div><div id="saAccount" class="sa-account-bar"><span id="saAccountEmail"></span><button id="saLogout" type="button">Cerrar sesión</button></div><button id="saLogout" class="secondary">Cerrar sesión</button></div><div id="emailStatusToast" class="email-status-toast hidden" role="status" aria-live="polite"></div>
+<div id="saMsg"></div></div></div><div id="saAccount" class="sa-account-bar"><span id="saAccountEmail"></span><button id="saLogout" type="button">Cerrar sesión</button></div></div><div id="emailStatusToast" class="email-status-toast hidden" role="status" aria-live="polite"></div>
 <header class="app-header"><button id="simpleModeToggle" class="simple-mode-toggle" type="button">◐ <span id="simpleModeToggleText">Modo simple</span></button>
   <div class="brand-wrap">
     <div class="brand-mark">◈</div>
@@ -1938,7 +1938,7 @@ body:not(.dark) .sa-admin{color:#1b2939}.sa-admin-box{background:rgba(255,255,25
 <section id="saAdmin" class="sa-admin hidden">
   <div class="sa-admin-top">
     <div><div class="section-index">ADMINISTRACIÓN</div><h2>Usuarios e inventarios</h2><p>Consulta las cuentas y revisa sus inventarios.</p></div>
-    <button id="saRefresh" class="secondary">Actualizar</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button id="saMyInventory" class="secondary">Mi inventario</button><button id="saRefresh" class="secondary">Actualizar</button></div>
   </div>
   <div class="sa-tabs">
     <button class="sa-tab active" data-tab="users">Usuarios</button>
@@ -1946,11 +1946,12 @@ body:not(.dark) .sa-admin{color:#1b2939}.sa-admin-box{background:rgba(255,255,25
   </div>
   <div id="saUsersTab" class="sa-admin-grid">
     <aside class="sa-admin-box">
-      <div class="sa-label">CUENTAS COMUNES</div>
+      <div class="sa-label">INVENTARIOS DISPONIBLES</div>
       <input id="saSearch" placeholder="Buscar usuario...">
       <div class="sa-fixed-users">
-  <div class="sa-label">USUARIOS AUTORIZADOS</div>
+  <div class="sa-label">INVENTARIOS AUTORIZADOS</div>
   <div class="sa-fixed-list">
+    <span>Administrador 1</span>
     <span>Lácteos y embutidos</span>
     <span>Harinas y dulces</span>
     <span>Gaseosas y snacks</span>
@@ -2193,7 +2194,9 @@ body:not(.dark) .sa-admin{color:#1b2939}.sa-admin-box{background:rgba(255,255,25
 
 <script>
 const KEY='control_vencimientos_v1';
-let products=JSON.parse(localStorage.getItem(KEY)||'[]');
+let products=[];
+let inventoryReady=false;
+let inventoryUserId=null;
 let editing=null;
 let videoStream=null;
 let isScanning=false;
@@ -2236,13 +2239,73 @@ $('closeBackupModal').onclick=()=>$('backupModal').classList.add('hidden');
 
 $('menuNotify').onclick=()=>{ $('dropdownMenu').classList.remove('show'); requestAndNotify(); };
 
-function saveData(){
-  localStorage.setItem(KEY,JSON.stringify(products));
+async function saveData(){
+  // Supabase is the source of truth once a user is authenticated.
+  if(window.appSupabase && window.appCurrentUserId){
+    try{
+      const rows=products.map(p=>({
+        id:p.id,
+        user_id:window.appCurrentUserId,
+        name:p.name||'',
+        barcode:p.barcode||null,
+        plu:p.plu||null,
+        quantity:Number(p.qty)||0,
+        expiry_date:p.date||null
+      }));
+      const {error:delError}=await window.appSupabase.from('products').delete().eq('user_id',window.appCurrentUserId);
+      if(delError) throw delError;
+      if(rows.length){
+        const {error:insError}=await window.appSupabase.from('products').insert(rows);
+        if(insError) throw insError;
+      }
+    }catch(e){
+      console.error('No se pudo guardar el inventario en Supabase:',e);
+      alert('No se pudo guardar el inventario en la nube. Revisa tu conexión e inténtalo de nuevo.');
+      return false;
+    }
+  }
+  try{localStorage.setItem((KEY+'_'+(window.appCurrentUserId||'local')),JSON.stringify(products));}catch(e){}
   syncInventoryToEmailService();
+  return true;
+}
+
+async function loadInventoryForUser(userId){
+  inventoryReady=false;
+  inventoryUserId=userId;
+  products=[];
+  if(!window.appSupabase){ render(); return; }
+  try{
+    const {data,error}=await window.appSupabase.from('products').select('id,name,barcode,plu,quantity,expiry_date').eq('user_id',userId).order('expiry_date',{ascending:true});
+    if(error) throw error;
+    products=(data||[]).map(p=>({id:p.id,name:p.name||'',barcode:p.barcode||'',plu:p.plu||'',qty:Number(p.quantity)||0,date:p.expiry_date||''}));
+    // Migration única: si el Administrador 1 ya tenía inventario local de la versión anterior
+    // y su inventario en Supabase está vacío, lo pasamos a su cuenta.
+    if(!products.length && userId===ADMIN1_ID){
+      try{
+        const legacy=JSON.parse(localStorage.getItem(KEY)||'[]');
+        if(Array.isArray(legacy) && legacy.length){
+          products=legacy.map(p=>({id:p.id||crypto.randomUUID(),name:p.name||'',barcode:p.barcode||'',plu:p.plu||'',qty:Number(p.qty)||0,date:p.date||''}));
+          const rows=products.map(p=>({id:p.id,user_id:userId,name:p.name,barcode:p.barcode||null,plu:p.plu||null,quantity:p.qty,expiry_date:p.date||null}));
+          const {error:migError}=await window.appSupabase.from('products').insert(rows);
+          if(migError) throw migError;
+          localStorage.removeItem(KEY);
+        }
+      }catch(e){console.warn('Migración de inventario local no realizada:',e);}
+    }
+    inventoryReady=true;
+    render();
+    if(typeof checkAlerts==='function') checkAlerts();
+  }catch(e){
+    console.error('No se pudo cargar el inventario:',e);
+    products=[];
+    inventoryReady=false;
+    render();
+    alert('No se pudo cargar el inventario de este usuario desde Supabase.');
+  }
 }
 
 const EMAIL_ALERT_WEBHOOK='https://script.google.com/macros/s/AKfycbzIcUoVT0SnCmR3K52odcxzkr_N4D_De7oXM1RA21d6vrWk1C0igTJdlYMtze95fXG9/exec';
-const EMAIL_SITE_ID=(location.hostname+'|'+location.pathname).replace(/[^a-zA-Z0-9._-]/g,'_').slice(0,120);
+const EMAIL_SITE_ID=((location.hostname+'|'+location.pathname+'|'+(window.appCurrentUserId||'local'))).replace(/[^a-zA-Z0-9._-]/g,'_').slice(0,120);
 const EMAIL_SYNC_KEY='ultima_sincronizacion_correo_v1';
 function syncInventoryToEmailService(){
   if(!EMAIL_ALERT_WEBHOOK) return;
@@ -3080,6 +3143,9 @@ setTimeout(macroRender,0);
   const $=id=>document.getElementById(id);
   const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
   let client=null, role='user', selected=null;
+  const ADMIN1_ID='d7513968-daec-4f69-8fd8-01dd9bc1c6f3';
+  let currentUser=null;
+  let adminHasOwnInventory=false;
 
   function msg(t,c=''){
     const el=$('saMsg');
@@ -3103,22 +3169,31 @@ setTimeout(macroRender,0);
   }
 
   async function enterApp(user,p){
+    currentUser=user;
     role=p.role||'user';
+    adminHasOwnInventory=(role==='admin' && user.id===ADMIN1_ID);
     selected=null;
+    window.appCurrentUserId=user.id;
     $('saAuth')?.classList.add('hidden');
     $('saAccount')?.classList.add('show');
-    if($('saAccountEmail'))$('saAccountEmail').textContent=user.email||'';
+    if($('saAccountEmail'))$('saAccountEmail').textContent=(p.full_name? p.full_name+' · ':'')+(user.email||'');
     setMacroVisibility();
 
     const main=document.querySelector('main');
+    const saAdmin=$('saAdmin');
     if(role==='admin'){
-      main?.classList.add('hidden');
-      $('saAdmin')?.classList.remove('hidden');
+      // Admin 1 has a real personal inventory; Admin 2 only supervises inventories.
+      if(adminHasOwnInventory) main?.classList.remove('hidden');
+      else main?.classList.add('hidden');
+      saAdmin?.classList.remove('hidden');
+      const myBtn=$('saMyInventory');
+      if(myBtn) myBtn.style.display=adminHasOwnInventory?'inline-flex':'none';
       await loadUsers();
     }else{
-      $('saAdmin')?.classList.add('hidden');
+      saAdmin?.classList.add('hidden');
       main?.classList.remove('hidden');
     }
+    await loadInventoryForUser(user.id);
   }
 
   async function login(){
@@ -3135,6 +3210,7 @@ setTimeout(macroRender,0);
       if(!window.SUPABASE_URL||!window.SUPABASE_PUBLISHABLE_KEY) throw new Error('Falta la configuración de Supabase.');
 
       if(!client) client=window.supabase.createClient(window.SUPABASE_URL,window.SUPABASE_PUBLISHABLE_KEY);
+      window.appSupabase=client;
 
       const {data,error}=await client.auth.signInWithPassword({email,password});
       if(error){
@@ -3149,6 +3225,7 @@ setTimeout(macroRender,0);
       const p=await getProfile(data.user);
       msg('Sesión iniciada.','ok');
       await enterApp(data.user,p);
+      await maybeOfferLocalMigration(data.user);
     }catch(e){
       console.error(e);
       msg(e?.message||'No se pudo iniciar sesión.','err');
@@ -3177,13 +3254,14 @@ setTimeout(macroRender,0);
 
   async function loadUsers(){
     const q=($('saSearch')?.value||'').trim();
-    const fixedNames=['Lácteos y embutidos','Harinas y dulces','Gaseosas y snacks','Otros','Bodega'];
-    let query=client.from('profiles').select('id,full_name,role,created_at').neq('role','admin').in('full_name',fixedNames).order('created_at',{ascending:true});
+    const fixedNames=['Administrador 1','Lácteos y embutidos','Harinas y dulces','Gaseosas y snacks','Otros','Bodega'];
+    let query=client.from('profiles').select('id,full_name,role,created_at').in('full_name',fixedNames).order('created_at',{ascending:true});
+    if(currentUser?.id && currentUser.id!==ADMIN1_ID) query=query.neq('id',currentUser.id);
     if(q)query=query.ilike('full_name','%'+q+'%');
     const {data,error}=await query;
     if(error){$('saUsers').innerHTML='<div class="sa-muted">'+esc(error.message)+'</div>';return;}
     $('saUserCount').textContent=`${data.length} usuario${data.length===1?'':'s'} registrado${data.length===1?'':'s'}`;
-    $('saUsers').innerHTML=data.map(u=>`<button type="button" class="sa-user ${selected?.id===u.id?'active':''}" data-id="${esc(u.id)}"><b>${esc(u.full_name||'Usuario sin nombre')}</b><small>Cuenta creada · ${new Date(u.created_at).toLocaleDateString('es-CO')}</small></button>`).join('')||'<div class="sa-muted">No hay usuarios comunes todavía.</div>';
+    $('saUsers').innerHTML=data.map(u=>`<button type="button" class="sa-user ${selected?.id===u.id?'active':''}" data-id="${esc(u.id)}"><b>${esc(u.full_name||'Usuario sin nombre')}</b><small>${u.role==='admin'?'Administrador · Inventario propio':'Usuario · Inventario propio'} · ${new Date(u.created_at).toLocaleDateString('es-CO')}</small></button>`).join('')||'<div class="sa-muted">No hay usuarios comunes todavía.</div>';
     $('saUsers').querySelectorAll('.sa-user').forEach(b=>b.onclick=()=>selectUser(b.dataset.id));
   }
 
@@ -3228,6 +3306,7 @@ setTimeout(macroRender,0);
     $('saSearch')?.addEventListener('input',loadUsers);
     $('saRefresh')?.addEventListener('click',loadUsers);
     $('saViewInventory')?.addEventListener('click',openInventory);
+    $('saMyInventory')?.addEventListener('click',async()=>{ if(!adminHasOwnInventory)return; await selectUser(ADMIN1_ID); await openInventory(); });
     document.querySelectorAll('.sa-tab').forEach(t=>t.addEventListener('click',async()=>{
       document.querySelectorAll('.sa-tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');
       const users=t.dataset.tab==='users';$('saUsersTab')?.classList.toggle('hidden',!users);$('saInventoryTab')?.classList.toggle('hidden',users);
@@ -3239,11 +3318,13 @@ setTimeout(macroRender,0);
     try{
       if(!window.supabase) throw new Error('La biblioteca de Supabase no cargó. Recarga la página.');
       client=window.supabase.createClient(window.SUPABASE_URL,window.SUPABASE_PUBLISHABLE_KEY);
+      window.appSupabase=client;
       const {data,error}=await client.auth.getSession();
       if(error)throw error;
       if(data.session){
         const p=await getProfile(data.session.user);
         await enterApp(data.session.user,p);
+        await maybeOfferLocalMigration(data.session.user);
       }else{
         $('saAuth')?.classList.remove('hidden');
       }
@@ -3261,6 +3342,137 @@ setTimeout(macroRender,0);
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});
   else start();
 })();
+
+  // Importación del inventario local: se pregunta una sola vez por dispositivo y cuenta.
+  const MIGRATION_PREFIX='inventory_migration_answered_';
+
+  function migrationKey(userId){
+    return MIGRATION_PREFIX + userId;
+  }
+
+  function localInventory(){
+    // Compatibilidad con los nombres de almacenamiento usados por versiones anteriores.
+    const keys=['products','inventory','inventario','vencimientos_inventory','vencimientos'];
+    for(const key of keys){
+      try{
+        const raw=localStorage.getItem(key);
+        if(!raw) continue;
+        const value=JSON.parse(raw);
+        if(Array.isArray(value) && value.length) return value;
+        if(value && Array.isArray(value.products) && value.products.length) return value.products;
+      }catch(e){}
+    }
+    return [];
+  }
+
+  function migrationAnswered(userId){
+    try{return localStorage.getItem(migrationKey(userId))==='1'}catch(e){return true}
+  }
+
+  function markMigrationAnswered(userId){
+    try{localStorage.setItem(migrationKey(userId),'1')}catch(e){}
+  }
+
+  function normalizeLocalProduct(p){
+    return {
+      name:String(p.name??p.nombre??'').trim(),
+      barcode:String(p.barcode??p.ean??p.codigo??'').trim()||null,
+      plu:String(p.plu??'').trim()||null,
+      quantity:Number(p.quantity??p.cantidad??0)||0,
+      expiry_date:(p.expiry_date??p.expiry??p.fechaVencimiento??p.vencimiento??null)||null
+    };
+  }
+
+  async function maybeOfferLocalMigration(user){
+    if(!user?.id || migrationAnswered(user.id)) return;
+
+    const local=localInventory();
+    if(!local.length){
+      markMigrationAnswered(user.id);
+      return;
+    }
+
+    // Si la cuenta ya tiene inventario, no se ofrece una importación que pueda duplicarlo.
+    const existing=await client.from('products').select('id',{count:'exact',head:true}).eq('user_id',user.id);
+    if(existing.error){
+      console.error('No se pudo comprobar el inventario antes de migrar:',existing.error);
+      return;
+    }
+    if((existing.count||0)>0){
+      markMigrationAnswered(user.id);
+      return;
+    }
+
+    const products=local.map(normalizeLocalProduct).filter(x=>x.name||x.barcode||x.plu);
+    if(!products.length){
+      markMigrationAnswered(user.id);
+      return;
+    }
+
+    const text=$('migrationText');
+    if(text)text.textContent=`Encontramos ${products.length} producto${products.length===1?'':'s'} guardado${products.length===1?'':'s'} localmente. ¿Quieres importarlo${products.length===1?'':'s'} a tu cuenta?`;
+
+    const modal=$('migrationModal');
+    if(!modal)return;
+
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden','false');
+
+    const close=()=>{modal.classList.add('hidden');modal.setAttribute('aria-hidden','true')};
+
+    const skip=$('migrationSkip');
+    const imp=$('migrationImport');
+
+    const skipHandler=()=>{
+      markMigrationAnswered(user.id);
+      close();
+      skip?.removeEventListener('click',skipHandler);
+      imp?.removeEventListener('click',importHandler);
+    };
+
+    const importHandler=async()=>{
+      imp.disabled=true;skip.disabled=true;imp.textContent='Importando...';
+      try{
+        const rows=products.map(x=>({...x,user_id:user.id}));
+        const {error}=await client.from('products').insert(rows);
+        if(error)throw error;
+        markMigrationAnswered(user.id);
+        close();
+        msg(`${rows.length} producto${rows.length===1?'':'s'} importado${rows.length===1?'':'s'} correctamente.`,'ok');
+        if(typeof renderInventory==='function') await renderInventory();
+      }catch(e){
+        console.error('Error importando inventario local:',e);
+        msg('No se pudo importar el inventario: '+(e.message||'error'),'err');
+      }finally{
+        imp.disabled=false;skip.disabled=false;imp.textContent='Importar inventario';
+      }
+    };
+
+    skip.addEventListener('click',skipHandler,{once:true});
+    imp.addEventListener('click',importHandler,{once:true});
+  }
 </script>
+
+<div id="migrationModal" class="migration-overlay hidden" aria-hidden="true">
+  <div class="migration-card">
+    <div class="migration-kicker">INVENTARIO LOCAL</div>
+    <h3>Encontramos un inventario en este dispositivo</h3>
+    <p id="migrationText">Hay productos guardados localmente. ¿Quieres importarlos a tu cuenta?</p>
+    <div class="migration-actions">
+      <button id="migrationSkip" type="button" class="secondary">No importar</button>
+      <button id="migrationImport" type="button" class="primary">Importar inventario</button>
+    </div>
+  </div>
+</div>
+<style id="migration-ui">
+.migration-overlay{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.58);backdrop-filter:blur(8px)}
+.migration-overlay.hidden{display:none}
+.migration-card{width:min(430px,100%);padding:24px;border-radius:18px;background:rgba(25,27,31,.96);border:1px solid rgba(255,255,255,.1);box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.migration-kicker{font-size:9px;letter-spacing:.16em;opacity:.55;margin-bottom:8px}
+.migration-card h3{margin:0 0 9px;font-size:19px}
+.migration-card p{margin:0;line-height:1.5;font-size:13px;opacity:.75}
+.migration-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
+.migration-actions button{margin:0!important}
+</style>
 </body>
 </html>
