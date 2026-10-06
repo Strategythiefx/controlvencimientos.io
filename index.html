@@ -2278,20 +2278,9 @@ async function loadInventoryForUser(userId){
     const {data,error}=await window.appSupabase.from('products').select('id,name,barcode,plu,quantity,expiry_date').eq('user_id',userId).order('expiry_date',{ascending:true});
     if(error) throw error;
     products=(data||[]).map(p=>({id:p.id,name:p.name||'',barcode:p.barcode||'',plu:p.plu||'',qty:Number(p.quantity)||0,date:p.expiry_date||''}));
-    // Migration única: si el Administrador 1 ya tenía inventario local de la versión anterior
-    // y su inventario en Supabase está vacío, lo pasamos a su cuenta.
-    if(!products.length && userId===ADMIN1_ID){
-      try{
-        const legacy=JSON.parse(localStorage.getItem(KEY)||'[]');
-        if(Array.isArray(legacy) && legacy.length){
-          products=legacy.map(p=>({id:p.id||crypto.randomUUID(),name:p.name||'',barcode:p.barcode||'',plu:p.plu||'',qty:Number(p.qty)||0,date:p.date||''}));
-          const rows=products.map(p=>({id:p.id,user_id:userId,name:p.name,barcode:p.barcode||null,plu:p.plu||null,quantity:p.qty,expiry_date:p.date||null}));
-          const {error:migError}=await window.appSupabase.from('products').insert(rows);
-          if(migError) throw migError;
-          localStorage.removeItem(KEY);
-        }
-      }catch(e){console.warn('Migración de inventario local no realizada:',e);}
-    }
+    // La migración del inventario local NO se hace automáticamente aquí.
+    // Se gestiona después del login mediante maybeOfferLocalMigration(),
+    // para que el usuario pueda decidir una sola vez si quiere importarlo.
     inventoryReady=true;
     render();
     if(typeof checkAlerts==='function') checkAlerts();
@@ -3351,18 +3340,34 @@ setTimeout(macroRender,0);
   }
 
   function localInventory(){
-    // Compatibilidad con los nombres de almacenamiento usados por versiones anteriores.
-    const keys=['products','inventory','inventario','vencimientos_inventory','vencimientos'];
+    // KEY real utilizado por el inventario anterior + nombres de versiones previas.
+    const keys=['control_vencimientos_v1','products','inventory','inventario','vencimientos_inventory','vencimientos'];
+    const found=[];
+    const seen=new Set();
+
     for(const key of keys){
       try{
         const raw=localStorage.getItem(key);
         if(!raw) continue;
         const value=JSON.parse(raw);
-        if(Array.isArray(value) && value.length) return value;
-        if(value && Array.isArray(value.products) && value.products.length) return value.products;
-      }catch(e){}
+        const arr=Array.isArray(value)?value:(value&&Array.isArray(value.products)?value.products:[]);
+        for(const p of arr){
+          if(!p || typeof p!=='object') continue;
+          const signature=[
+            String(p.name??p.nombre??'').trim().toLowerCase(),
+            String(p.barcode??p.ean??p.codigo??'').trim(),
+            String(p.plu??'').trim(),
+            String(p.qty??p.quantity??p.cantidad??''),
+            String(p.date??p.expiry_date??p.expiry??p.fechaVencimiento??p.vencimiento??'')
+          ].join('|');
+          if(!seen.has(signature)){
+            seen.add(signature);
+            found.push(p);
+          }
+        }
+      }catch(e){console.warn('No se pudo leer localStorage '+key,e)}
     }
-    return [];
+    return found;
   }
 
   function migrationAnswered(userId){
@@ -3388,7 +3393,9 @@ setTimeout(macroRender,0);
 
     const local=localInventory();
     if(!local.length){
-      markMigrationAnswered(user.id);
+      // No inventory was found. No hacemos la pregunta ni marcamos una respuesta:
+      // así, si el inventario local aparece después por una versión antigua,
+      // todavía podrá detectarse.
       return;
     }
 
@@ -3399,7 +3406,7 @@ setTimeout(macroRender,0);
       return;
     }
     if((existing.count||0)>0){
-      markMigrationAnswered(user.id);
+      // Ya existe inventario remoto: no hay nada que importar.
       return;
     }
 
