@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Control de Vencimientos · Entregables</title>
+<style>
+:root{color-scheme:light;--ink:#17211b;--muted:#5e6b62;--line:#dce5de;--bg:#f5f8f5;--green:#176b43;--pale:#e8f3eb}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header{padding:42px 22px 34px;background:#123c2a;color:white}header .wrap,main{max-width:980px;margin:auto}
+.eyebrow{text-transform:uppercase;letter-spacing:.12em;font-size:.76rem;opacity:.8}h1{font-size:clamp(2rem,5vw,3.2rem);line-height:1.08;margin:.6rem 0}header p{max-width:700px;line-height:1.65;color:#e2eee6}
+main{padding:28px 20px 56px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.card{background:white;border:1px solid var(--line);border-radius:18px;padding:22px;display:flex;flex-direction:column;min-height:220px;box-shadow:0 5px 18px #183b2510}
+.num{font-size:.8rem;color:var(--green);font-weight:800;letter-spacing:.08em}h2{font-size:1.2rem;margin:10px 0}p{color:var(--muted);line-height:1.55;margin:0 0 18px}
+a.btn{margin-top:auto;display:inline-flex;justify-content:center;align-items:center;text-decoration:none;background:var(--green);color:white;font-weight:700;padding:12px 15px;border-radius:10px}
+a.btn.secondary{background:var(--pale);color:#145637;border:1px solid #c8dfce}
+.note{margin-top:20px;padding:16px 18px;background:#fff;border:1px solid var(--line);border-radius:14px;color:var(--muted);line-height:1.6}
+footer{font-size:.85rem;color:var(--muted);padding-top:24px}
+@media(max-width:520px){header{padding-top:30px}.card{min-height:0}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+<div class="eyebrow">Proyecto · Entregables digitales</div>
+<h1>Control de Vencimientos</h1>
+<p>Acceso directo a la aplicación principal y al panel de alertas del proyecto.</p>
+</div></header>
+<main>
+<div class="grid">
+<section class="card">
+<div class="num">ENTREGABLE 01</div><h2>MVP 1 · Aplicación principal</h2>
+<p>Abre la aplicación publicada en Google AI Studio para revisar la propuesta principal de Control de Vencimientos.</p>
+<a class="btn" href="https://control-de-vencimientos-multiinventario-carulla-c.ai.studio" target="_blank" rel="noopener">Abrir MVP 1 ↗</a>
+</section>
+<section class="card">
+<div class="num">ENTREGABLE 02</div><h2>MVP 2 · Panel de alertas</h2>
+<p>Abre el panel complementario. Para publicarlo junto a esta página, guarda el archivo del MVP 2 como <strong>mvp2.html</strong> en la misma carpeta del repositorio.</p>
+<a class="btn secondary" href="./mvp2.html">Abrir MVP 2 ↗</a>
+</section>
+
+</div>
+<div class="note">Abre cada entregable desde su botón. Para que el MVP 2 abra desde esta página, publica el archivo <code>mvp2.html</code> en la misma carpeta que este <code>index.html</code>.</div>
+<footer>Control de Vencimientos · Página central de entregables</footer>
+</main>
+</body>
+</html>
